@@ -7,7 +7,7 @@
     "scripts": {
         "build": "tsc",
         "start": "node build/index.js",
-        "dev": "ts-node src/index.ts"
+        "dev": "node --env-file=.env --loader ts-node/esm src/index.ts"
     },
     "dependencies": {
         "@modelcontextprotocol/sdk": "^1.0.1",
