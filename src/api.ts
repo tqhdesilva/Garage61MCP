@@ -18,6 +18,9 @@ export class Garage61Client {
                 Authorization: `Bearer ${apiToken}`,
                 'Content-Type': 'application/json',
             },
+            paramsSerializer: {
+                indexes: null, // serializes arrays as drivers=a&drivers=b
+            },
         });
     }
 

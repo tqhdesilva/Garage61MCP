@@ -1,5 +1,30 @@
 # Garage61 MCP Server
 
+ This is an MCP server for the Garage61 API, allowing you to access sim racing data, compare laps, and view team statistics.
+
+ ## Configuration
+
+ ### Gemini CLI
+
+ To use this server with the Gemini CLI, add the following configuration to your `~/.gemini/settings.json` file under the `mcpServers` key:
+
+ ```json
+ "garage61": {
+   "command": "node",
+   "args": ["/Users/tdesilva/repos/Garage61MCP/build/index.js"],
+   "env": {
+     "GARAGE61_TOKEN": "<YOUR_GARAGE61_TOKEN>"
+   }
+ }
+ ```
+
+ > **Note:** frequent users may want to install dependencies globally or ensure `node` is in their PATH.
+
+ ### Environment Variables
+
+ - `GARAGE61_TOKEN`: Your personal access token from the [Garage61 Developer Portal](https://garage61.net/developer).
+
+
 An MCP server implementation for the Garage61 API, allowing AI agents to retrieve sim racing telemetry and statistics.
 
 ## Prerequisites

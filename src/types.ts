@@ -33,10 +33,43 @@ export interface Lap {
 }
 
 export interface LapFilters {
-    car?: string;
-    track?: string;
-    team?: string;
-    driver?: string;
+    // Entity filters
+    cars?: (string | number)[];
+    tracks?: (string | number)[];
+    seasons?: (string | number)[];
+    drivers?: string[]; // 'me', 'following', or specific driver slugs
+    teams?: string[];
+    extraDrivers?: string[]; // specific user slugs
+    event?: string;
+
+    // Time/Age filters
+    age?: number; // Days ago (positive) or seasons ago (negative)
+    after?: string; // ISO date string
+
+    // Session/Lap type filters
+    sessionTypes?: number[]; // 1: Practice, 2: Qualifying, 3: Race
+    sessionSetupTypes?: number[]; // 1: Open, 2: Fixed
+    lapTypes?: number[]; // 1: Normal, 2: Joker, 3: Out, 4: In
+
+    // Performance/Conditions filters
+    minLapTime?: number;
+    maxLapTime?: number;
+    minFuelUsed?: number;
+    maxFuelUsed?: number;
+    minFuel?: number;
+    maxFuel?: number;
+    minRating?: number;
+    maxRating?: number;
+    unclean?: boolean;
+
+    // Content availability
+    seeTelemetry?: boolean;
+    seeGhostLap?: boolean;
+    seeSetup?: boolean;
+
+    // Formatting/Pagination
+    round?: 'metric' | 'englishStandard';
+    group?: 'driver' | 'driver-car' | 'none';
     limit?: number;
     offset?: number;
 }

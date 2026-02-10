@@ -64,29 +64,66 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
             },
             {
                 name: "find_laps",
-                description: "Search for laps with filters",
+                description: "Search for laps with filters. Note: Most ID filters expect arrays.",
                 inputSchema: {
                     type: "object",
                     properties: {
-                        car: {
-                            type: "string",
-                            description: "Car ID or name",
+                        drivers: {
+                            type: "array",
+                            items: { type: "string" },
+                            description: "Drivers to include: 'me', 'following', or driver slugs.",
                         },
-                        track: {
-                            type: "string",
-                            description: "Track ID or name",
+                        cars: {
+                            type: "array",
+                            items: { type: "number" },
+                            description: "Car IDs to search for.",
                         },
-                        team: {
-                            type: "string",
-                            description: "Team ID (optional)",
+                        tracks: {
+                            type: "array",
+                            items: { type: "number" },
+                            description: "Track IDs to search for.",
                         },
-                        driver: {
-                            type: "string",
-                            description: "Driver ID (optional)",
+                        teams: {
+                            type: "array",
+                            items: { type: "string" },
+                            description: "Team slugs to include.",
+                        },
+                        seasons: {
+                            type: "array",
+                            items: { type: "number" },
+                            description: "Season IDs.",
+                        },
+                        sessionTypes: {
+                            type: "array",
+                            items: { type: "number" },
+                            description: "1: Practice, 2: Qualifying, 3: Race",
+                        },
+                        lapTypes: {
+                            type: "array",
+                            items: { type: "number" },
+                            description: "1: Normal, 2: Joker, 3: Out, 4: In",
+                        },
+                        unclean: {
+                            type: "boolean",
+                            description: "Include invalid/unclean laps?",
+                        },
+                        minLapTime: {
+                            type: "number",
+                        },
+                        maxLapTime: {
+                            type: "number",
+                        },
+                        age: {
+                            type: "number",
+                            description: "Max age in days (positive) or seasons (negative).",
                         },
                         limit: {
                             type: "number",
                             description: "Max number of results (default 10)",
+                        },
+                        offset: {
+                            type: "number",
+                            description: "Pagination offset",
                         },
                     },
                 },
