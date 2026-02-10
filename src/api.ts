@@ -19,7 +19,18 @@ export class Garage61Client {
                 'Content-Type': 'application/json',
             },
             paramsSerializer: {
-                indexes: null, // serializes arrays as drivers=a&drivers=b
+                serialize: (params) => {
+                    const searchParams = new URLSearchParams();
+                    for (const key in params) {
+                        const value = params[key];
+                        if (Array.isArray(value)) {
+                            searchParams.append(key, value.join(','));
+                        } else if (value !== undefined && value !== null) {
+                            searchParams.append(key, value.toString());
+                        }
+                    }
+                    return searchParams.toString();
+                }
             },
         });
     }

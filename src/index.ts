@@ -1,5 +1,8 @@
 import { Server } from "@modelcontextprotocol/sdk/server/index.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
+import * as fs from 'fs/promises';
+import * as path from 'path';
+import * as os from 'os';
 import {
     CallToolRequestSchema,
     ListToolsRequestSchema,
@@ -117,6 +120,10 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
                             type: "number",
                             description: "Max age in days (positive) or seasons (negative).",
                         },
+                        after: {
+                            type: "string",
+                            description: "ISO date string to find laps after this date.",
+                        },
                         limit: {
                             type: "number",
                             description: "Max number of results (default 10)",
@@ -144,7 +151,7 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
             },
             {
                 name: "get_lap_telemetry",
-                description: "Fetch telemetry data for a lap as CSV",
+                description: "Fetch telemetry data for a lap. Saves the csv to a local file in tmpdir with name garage61-telemetry-${lapId}.csv. Returns the path + preview.",
                 inputSchema: {
                     type: "object",
                     properties: {
@@ -190,6 +197,26 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
             }
             case "find_laps": {
                 const args = request.params.arguments as any;
+
+                // transform generic "drivers" list into API's "drivers" vs "extraDrivers"
+                if (args.drivers && Array.isArray(args.drivers)) {
+                    const apiDrivers: string[] = [];
+                    const extraDrivers: string[] = [];
+
+                    for (const d of args.drivers) {
+                        if (d === 'me' || d === 'following') {
+                            apiDrivers.push(d);
+                        } else {
+                            extraDrivers.push(d);
+                        }
+                    }
+
+                    if (apiDrivers.length > 0) args.drivers = apiDrivers;
+                    else delete args.drivers;
+
+                    if (extraDrivers.length > 0) args.extraDrivers = extraDrivers;
+                }
+
                 const laps = await client.findLaps(args);
                 return {
                     content: [{ type: "text", text: JSON.stringify(laps, null, 2) }],
@@ -205,8 +232,23 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
             case "get_lap_telemetry": {
                 const { lapId } = request.params.arguments as { lapId: string };
                 const csv = await client.getLapTelemetry(lapId);
+
+                // Save to a temporary file to avoid polluting context
+                const tmpDir = os.tmpdir();
+                const filePath = path.join(tmpDir, `garage61-telemetry-${lapId}.csv`);
+                await fs.writeFile(filePath, csv, 'utf-8');
+
+                // Get a preview
+                const previewLength = 500;
+                const preview = csv.length > previewLength
+                    ? csv.substring(0, previewLength) + "...(truncated)"
+                    : csv;
+
                 return {
-                    content: [{ type: "text", text: csv }],
+                    content: [{
+                        type: "text",
+                        text: `Telemetry data (${(csv.length / 1024).toFixed(1)} KB) saved to file.\nPath: ${filePath}\n\nPreview:\n${preview}`
+                    }],
                 };
             }
             default:
