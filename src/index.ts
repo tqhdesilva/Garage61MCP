@@ -3,6 +3,10 @@ import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js"
 import * as fs from 'fs/promises';
 import * as path from 'path';
 import * as os from 'os';
+import { exec } from 'child_process';
+import { promisify } from 'util';
+
+const execAsync = promisify(exec);
 import {
     CallToolRequestSchema,
     ListToolsRequestSchema,
@@ -67,7 +71,7 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
             },
             {
                 name: "find_laps",
-                description: "Search for laps with filters. Note: Most ID filters expect arrays.",
+                description: "Search for laps with filters. Note: Most ID filters expect arrays. Defaults to getting latest laps (age: 7)",
                 inputSchema: {
                     type: "object",
                     properties: {
@@ -163,6 +167,51 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
                     required: ["lapId"],
                 },
             },
+            {
+                name: "analyze_telemetry",
+                description: "Analyze a local telemetry CSV file to extract braking zones, corners, throttle application, and sector times.",
+                inputSchema: {
+                    type: "object",
+                    properties: {
+                        filepath: {
+                            type: "string",
+                            description: "Absolute path to the telemetry CSV file",
+                        },
+                    },
+                    required: ["filepath"],
+                },
+            },
+            {
+                name: "plot_telemetry",
+                description: "Generate a plot of telemetry channels for a specific sector or the whole lap. Returns the path to the generated image.",
+                inputSchema: {
+                    type: "object",
+                    properties: {
+                        filepath: {
+                            type: "string",
+                            description: "Absolute path to the telemetry CSV file",
+                        },
+                        output: {
+                            type: "string",
+                            description: "Path to save the output image (optional, defaults to a temp file)",
+                        },
+                        start: {
+                            type: "number",
+                            description: "Start distance percentage (0.0 to 1.0)",
+                        },
+                        end: {
+                            type: "number",
+                            description: "End distance percentage (0.0 to 1.0)",
+                        },
+                        channels: {
+                            type: "array",
+                            items: { type: "string" },
+                            description: "List of channels to plot (e.g. ['Speed', 'Brake', 'Throttle'])",
+                        },
+                    },
+                    required: ["filepath"],
+                },
+            },
         ],
     };
 });
@@ -217,6 +266,11 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
                     if (extraDrivers.length > 0) args.extraDrivers = extraDrivers;
                 }
 
+                // Default to last week if no time/age filter provided
+                if (args.age === undefined && args.after === undefined) {
+                    args.age = 7;
+                }
+
                 const laps = await client.findLaps(args);
                 return {
                     content: [{ type: "text", text: JSON.stringify(laps, null, 2) }],
@@ -231,6 +285,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
             }
             case "get_lap_telemetry": {
                 const { lapId } = request.params.arguments as { lapId: string };
+                // ... existing implementation ...
                 const csv = await client.getLapTelemetry(lapId);
 
                 // Save to a temporary file to avoid polluting context
@@ -250,6 +305,73 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
                         text: `Telemetry data (${(csv.length / 1024).toFixed(1)} KB) saved to file.\nPath: ${filePath}\n\nPreview:\n${preview}`
                     }],
                 };
+            }
+            case "analyze_telemetry": {
+                const { filepath } = request.params.arguments as { filepath: string };
+                const scriptPath = path.join(process.cwd(), 'src/python/telemetry/analyze_lap.py');
+                const pythonPath = path.join(process.cwd(), '.venv/bin/python');
+
+                try {
+                    const { stdout, stderr } = await execAsync(`"${pythonPath}" "${scriptPath}" "${filepath}"`);
+                    if (stderr) {
+                        console.error(`Telemetry analysis stderr: ${stderr}`);
+                    }
+                    return {
+                        content: [{ type: "text", text: stdout }],
+                    };
+                } catch (error: any) {
+                    return {
+                        content: [{ type: "text", text: `Error running analysis: ${error.message}\nStderr: ${error.stderr}` }],
+                        isError: true,
+                    };
+                }
+            }
+            case "plot_telemetry": {
+                const args = request.params.arguments as any;
+                const filepath = args.filepath;
+                const scriptPath = path.join(process.cwd(), 'src/python/telemetry/plot_lap.py');
+                const pythonPath = path.join(process.cwd(), '.venv/bin/python');
+
+                // Determine output path
+                const output = args.output || path.join(os.tmpdir(), `telemetry_plot_${Date.now()}.png`);
+
+                let cmd = `"${pythonPath}" "${scriptPath}" "${filepath}" --output "${output}"`;
+                if (args.start !== undefined) cmd += ` --start ${args.start}`;
+                if (args.end !== undefined) cmd += ` --end ${args.end}`;
+                if (args.channels) {
+                    const channelStr = Array.isArray(args.channels) ? args.channels.join(',') : args.channels;
+                    cmd += ` --channels "${channelStr}"`;
+                }
+
+                try {
+                    const { stdout, stderr } = await execAsync(cmd);
+                    if (stderr) {
+                        console.error(`Telemetry plotting stderr: ${stderr}`);
+                    }
+
+                    // Read the file and convert to base64
+                    const imageBuffer = await fs.readFile(output);
+                    const base64Image = imageBuffer.toString('base64');
+
+                    return {
+                        content: [
+                            {
+                                type: "text",
+                                text: `Plot generated at ${output}`
+                            },
+                            {
+                                type: "image",
+                                data: base64Image,
+                                mimeType: "image/png"
+                            }
+                        ],
+                    };
+                } catch (error: any) {
+                    return {
+                        content: [{ type: "text", text: `Error generating plot: ${error.message}\nStderr: ${error.stderr}` }],
+                        isError: true,
+                    };
+                }
             }
             default:
                 throw new Error(`Unknown tool: ${request.params.name}`);
