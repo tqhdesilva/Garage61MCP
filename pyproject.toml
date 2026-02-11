@@ -1,5 +1,5 @@
 [project]
-name = "garage61mcp"
+name = "garage61_mcp"
 version = "0.1.0"
 description = "Add your description here"
 readme = "README.md"
@@ -12,3 +12,10 @@ dependencies = [
     "pandas>=2.0.0",
     "python-dotenv>=1.0.0",
 ]
+
+[project.scripts]
+garage61-mcp = "garage61_mcp.server:main"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"

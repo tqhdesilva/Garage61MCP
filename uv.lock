@@ -736,9 +736,9 @@ wheels = [
 ]
 
 [[package]]
-name = "garage61mcp"
+name = "garage61-mcp"
 version = "0.1.0"
-source = { virtual = "." }
+source = { editable = "." }
 dependencies = [
     { name = "fastmcp" },
     { name = "httpx" },

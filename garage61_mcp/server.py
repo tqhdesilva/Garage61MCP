@@ -1,5 +1,7 @@
 import os
 import json
+import json
+from datetime import date, datetime
 from typing import List, Optional
 from fastmcp import FastMCP
 from dotenv import load_dotenv
@@ -7,8 +9,8 @@ from dotenv import load_dotenv
 # Load environment variables
 load_dotenv()
 
-from garage61_mcp.client import Garage61Client
-from garage61_mcp.telemetry_analysis import TelemetryAnalyzer
+from .client import Garage61Client
+from .telemetry_analysis import TelemetryAnalyzer
 
 # Initialize FastMCP server
 mcp = FastMCP("garage61-mcp-server")
@@ -119,6 +121,7 @@ async def find_laps(
     age: Optional[int] = None,
     after: Optional[str] = None,
     session_id: Optional[str] = None,
+    group: Optional[str] = 'driver',
     limit: int = 10,
     offset: int = 0,
 ) -> str:
@@ -138,8 +141,9 @@ async def find_laps(
         min_lap_time: Minimum lap time in seconds.
         max_lap_time: Maximum lap time in seconds.
         age: Maximum age of laps in days. Defaults to 7 days if no time filter is provided.
-        after: ISO date string to find laps after this date.
+        after: ISO datetime string to find laps after this date.
         session_id: Filter by a specific Session ID.
+        group: Grouping mode. Options: 'driver' (default), 'driver-car', 'none'. 'none' returns all laps.
         limit: Maximum number of results to return (default 10).
         offset: Pagination offset.
         
@@ -175,12 +179,32 @@ async def find_laps(
     if limit is not None: filters['limit'] = limit
     if offset is not None: filters['offset'] = offset
     if session_id: filters['session'] = session_id
+    if group: filters['group'] = group
     
     # helper for age/after
     if age is not None:
         filters['age'] = age
     elif after is not None:
-        filters['after'] = after
+        try:
+            # Try to parse as a full ISO datetime string
+            datetime.fromisoformat(after.replace('Z', '+00:00'))
+            if 'T' in after:
+                # Genuine datetime string, use as-is
+                filters['after'] = after
+            else:
+                # datetime.fromisoformat also accepts bare dates (YYYY-MM-DD),
+                # but the API requires a full datetime
+                filters['after'] = f"{after}T00:00:00Z"
+        except ValueError:
+            try:
+                # Fall back to date-only parsing
+                date.fromisoformat(after)
+                filters['after'] = f"{after}T00:00:00Z"
+            except ValueError:
+                raise ValueError(
+                    f"Invalid format for 'after'. Expected ISO 8601 date (YYYY-MM-DD) "
+                    f"or datetime (YYYY-MM-DDTHH:MM:SSZ). Got: {after}"
+                )
     else:
         # Default to last week if no time/age filter provided
         filters['age'] = 7
@@ -322,3 +346,9 @@ async def plot_telemetry(
         return f"Plot generated at {output}"
     else:
         return "Error generating plot."
+
+def main():
+    mcp.run(transport='stdio')
+
+if __name__ == "__main__":
+    main()
