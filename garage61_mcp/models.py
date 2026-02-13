@@ -1,6 +1,6 @@
 from typing import List, Optional, Union, Dict, Any
 from enum import Enum
-from pydantic import BaseModel, Field, field_validator, model_validator
+from pydantic import BaseModel, Field, field_validator, model_validator, ConfigDict
 from datetime import datetime, date
 
 class SessionType(int, Enum):
@@ -208,8 +208,7 @@ class Lap(BaseModel):
     sectors: Optional[List[Dict[str, Any]]] = None
     clean: bool
     
-    class Config:
-        populate_by_name = True
+    model_config = ConfigDict(populate_by_name=True)
 
 class LapList(BaseModel):
     items: List[Lap]
@@ -247,5 +246,4 @@ class Me(BaseModel):
     apiPermissions: List[str]
     teams: List[TeamInfo]
     
-    class Config:
-        populate_by_name = True
+    model_config = ConfigDict(populate_by_name=True)

@@ -49,8 +49,7 @@ async def list_teams() -> str:
     List all teams that the authenticated user is a member of.
     """
     teams = await client.list_teams()
-    return json.dumps([t.model_dump() for t in teams], indent=2)
-
+    return json.dumps([t.model_dump(mode='json') for t in teams], indent=2)
 
 @mcp.tool()
 async def get_team_stats(team_id: str) -> str:
@@ -60,15 +59,13 @@ async def get_team_stats(team_id: str) -> str:
     stats = await client.get_team_stats(team_id)
     return stats.model_dump_json(indent=2)
 
-
 @mcp.tool()
 async def list_cars() -> str:
     """
     List all available cars on the platform.
     """
     cars = await client.list_cars()
-    return json.dumps([c.model_dump() for c in cars], indent=2)
-
+    return json.dumps([c.model_dump(mode='json') for c in cars], indent=2)
 
 @mcp.tool()
 async def list_tracks() -> str:
@@ -76,8 +73,7 @@ async def list_tracks() -> str:
     List all available tracks on the platform.
     """
     tracks = await client.list_tracks()
-    return json.dumps([t.model_dump() for t in tracks], indent=2)
-
+    return json.dumps([t.model_dump(mode='json') for t in tracks], indent=2)
 
 @mcp.tool()
 async def find_laps(
@@ -100,30 +96,8 @@ async def find_laps(
 ) -> str:
     """
     Search for laps based on various criteria like driver, car, track, and time.
-    
-    Args:
-        drivers: List of driver identifiers. Special values: 'me', 'following'. Also accepts driver slugs.
-        cars: List of car IDs.
-        tracks: List of track IDs.
-        teams: List of team slugs.
-        seasons: List of season IDs.
-        session_types: List of session type IDs (1: Practice, 2: Qualifying, 3: Race).
-        lap_types: List of lap type IDs (1: Normal, 2: Joker, 3: Out, 4: In).
-        unclean: Set to True to include invalid/unclean laps.
-        min_lap_time: Minimum lap time in seconds.
-        max_lap_time: Maximum lap time in seconds.
-        age: Maximum age of laps in days. Defaults to 7 days if no time filter is provided.
-        after: ISO datetime string (YYYY-MM-DD or YYYY-MM-DDTHH:MM:SS) to find laps after this date.
-        session_id: Filter by a specific Session ID.
-        group: Grouping mode. Options: 'driver' (default), 'driver-car', 'none'.
-        limit: Maximum number of results to return (default 10).
-        offset: Pagination offset.
     """
     # 1. default age logic if no time filter is provided
-    # The Pydantic model doesn't enforce default age=7 if nothing else is provided, 
-    # so we keep that logic here or move it to client. 
-    # Moving it to client is cleaner, but Pydantic "default" values are static. 
-    # Let's keep it here for now to match previous behavior exactly.
     if age is None and after is None:
         age = 7
 
@@ -153,7 +127,7 @@ async def find_laps(
     # 3. Call client
     try:
         laps = await client.find_laps(params)
-        return json.dumps([l.model_dump(by_alias=True) for l in laps], indent=2)
+        return json.dumps([l.model_dump(mode='json', by_alias=True) for l in laps], indent=2)
     except Exception as e:
         return f"API Error: {str(e)}"
 
