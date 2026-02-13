@@ -301,7 +301,7 @@ async def plot_telemetry(
     **Args:**
     - `filepath`: Path to the CSV telemetry file.
     - `output`: Optional output path for the PNG image (system will generate one if not provided).
-    - `start`/`end`: Distance range (meters) to plot (optional, zooms in).
+    - `start`/`end`: Distance range to plot as a percentage of the lap (0.0 to 1.0).
     - `channels`: List of channels to plot (default: `['Speed', 'Brake', 'Throttle']`).
     """
     analyzer = TelemetryAnalyzer()
@@ -346,8 +346,10 @@ async def plot_overlay(
     - `filepaths`: List of CSV file paths to overlay.
     - `labels`: Legend labels corresponding to each file.
     - `output`: Output PNG path.
-    - `start`/`end`: Distance range to plot.
+    - `start`/`end`: Distance range to plot as a percentage of the lap (0.0 to 1.0).
     - `channels`: Channels to compare (default: Speed, Brake, Throttle).
+    - `markers`: Optional dictionary of markers to draw on the plot. 
+                 Format: {dist_pct: "Label"} where dist_pct is a float between 0.0 and 1.0.
     """
     analyzer = TelemetryAnalyzer()
     
