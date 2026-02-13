@@ -23,6 +23,12 @@ client = Garage61Client()
 async def get_me() -> str:
     """
     Get information about the currently authenticated user.
+    
+    Returns details like:
+    - `id`, `slug`, `firstName`, `lastName`
+    - `subscriptionPlan`
+    - `teams` (list of teams the user belongs to)
+    - `apiPermissions`
     """
     user = await client.get_me()
     return user.model_dump_json(indent=2, by_alias=True)
@@ -37,6 +43,14 @@ async def get_my_stats(
 ) -> str:
     """
     Get driving statistics for the authenticated user.
+    
+    Returns a list of `drivingStatistics` entries containing aggregated data.
+    
+    **Filters:**
+    - `start`: ISO datetime string (e.g., `2023-01-01`).
+    - `end`: ISO datetime string.
+    - `track`: Filter by track name or ID.
+    - `car`: Filter by car name or ID.
     """
     stats = await client.get_my_stats(start, end, track, car)
     # UserStats model dump
@@ -47,6 +61,10 @@ async def get_my_stats(
 async def list_teams() -> str:
     """
     List all teams that the authenticated user is a member of.
+    
+    Returns a list of teams, where each team contains:
+    - `id`, `name`, `slug`
+    - `members` (if available in the summary)
     """
     teams = await client.list_teams()
     return json.dumps([t.model_dump(mode='json') for t in teams], indent=2)
@@ -55,6 +73,11 @@ async def list_teams() -> str:
 async def get_team_stats(team_id: str) -> str:
     """
     Get driving statistics for a specific team.
+    
+    Returns aggregated `drivingStatistics` for all members of the team.
+    
+    **Args:**
+    - `team_id`: The unique ID of the team (e.g., from `list_teams`).
     """
     stats = await client.get_team_stats(team_id)
     return stats.model_dump_json(indent=2)
@@ -63,6 +86,12 @@ async def get_team_stats(team_id: str) -> str:
 async def list_cars() -> str:
     """
     List all available cars on the platform.
+    
+    Returns a list of cars with:
+    - `id` (integer)
+    - `name`
+    - `platform` (e.g., 'iracing', 'acc')
+    - `platform_id`
     """
     cars = await client.list_cars()
     return json.dumps([c.model_dump(mode='json') for c in cars], indent=2)
@@ -71,6 +100,12 @@ async def list_cars() -> str:
 async def list_tracks() -> str:
     """
     List all available tracks on the platform.
+    
+    Returns a list of tracks with:
+    - `id` (integer)
+    - `name`
+    - `variant` (if applicable)
+    - `platform`
     """
     tracks = await client.list_tracks()
     return json.dumps([t.model_dump(mode='json') for t in tracks], indent=2)
@@ -96,6 +131,38 @@ async def find_laps(
 ) -> str:
     """
     Search for laps based on various criteria like driver, car, track, and time.
+
+    **Defaults:**
+    - If no time filter (`age` or `after`) is provided, defaults to **last 7 days** (`age=7`).
+    - Defaults to grouping by driver (`group='driver'`). To get individual laps, use `group='none'`.
+
+    **Parameters:**
+    - `drivers`: Who to search for. 
+        - Use `['me']` for your own laps.
+        - Use `['following']` for people you follow.
+        - Use specific driver slugs (e.g., `['max-verstappen']`) for others.
+    - `cars`: List of Car IDs (integer). Use `list_cars` to find these.
+    - `tracks`: List of Track IDs (integer). Use `list_tracks` to find these.
+    - `teams`: List of Team slugs (string).
+    - `pro`: If True, only search generic "pro" drivers (Garage61 concept).
+    - `unclean`: Set to `True` to include invalid/incomplete laps. Defaults to `False` (clean laps only).
+    
+    **Time Filters:**
+    - `age`: Number of days to look back. 
+        - `7`: Last week (default).
+        - `30`: Last month.
+        - `-1`: Current season (dynamically determined by Garage61).
+        - `-2`: Current + previous season.
+    - `after`: Specific start date (ISO string `YYYY-MM-DD` or `YYYY-MM-DDTHH:MM:SS`). 
+      Overrides `age` if provided.
+
+    **Pagination & Grouping:**
+    - `group`: Controls how results are aggregated.
+        - `'driver'` (default): One result per driver/car/track combo (best lap).
+        - `'driver-car'`: One result per driver/car combo.
+        - `'none'`: **Returns ALL individual laps** matching criteria. Use this for raw data analysis.
+    - `limit`: Max results (default 10). Max 1000.
+    - `offset`: Number of results to skip.
     """
     # 1. default age logic if no time filter is provided
     if age is None and after is None:
@@ -136,6 +203,11 @@ async def find_laps(
 async def get_lap_details(lap_id: str) -> str:
     """
     Get detailed information for a specific lap.
+    
+    Returns a `Lap` object containing:
+    - Basic info: `id`, `lapTime`, `date`, `clean` status
+    - Entities: `driver` (UserInfo), `car`, `track`
+    - `sectors`: List of sector times and splits
     """
     try:
         lap = await client.get_lap_details(lap_id)
@@ -148,6 +220,12 @@ async def get_lap_details(lap_id: str) -> str:
 async def get_lap_telemetry(lap_id: str) -> str:
     """
     Download telemetry data for a specific lap and save it to a local CSV file.
+    
+    **Returns:**
+    - Status message with the local **file path** of the downloaded CSV.
+    - A brief text preview of the CSV content (first few lines).
+    
+    The CSV file can then be used with `analyze_telemetry` or `plot_telemetry`.
     """
     try:
         csv_content = await client.get_lap_telemetry(lap_id)
@@ -172,6 +250,13 @@ async def get_lap_telemetry(lap_id: str) -> str:
 async def analyze_telemetry(filepath: str) -> str:
     """
     Analyze a local telemetry CSV file to extract performance metrics.
+    
+    **Outputs:**
+    - `summary`: Max/Avg speed, total samples.
+    - `braking_zones`: List of major braking events.
+    - `corners`: Detected corners with min speeds.
+    - `throttle_zones`: Full throttle sections.
+    - `sectors`: Sector timing analysis (if sector info available).
     """
     analyzer = TelemetryAnalyzer()
     if not analyzer.load_data(filepath):
@@ -212,6 +297,12 @@ async def plot_telemetry(
 ) -> str:
     """
     Generate a plot of telemetry channels for a specific sector or the whole lap.
+    
+    **Args:**
+    - `filepath`: Path to the CSV telemetry file.
+    - `output`: Optional output path for the PNG image (system will generate one if not provided).
+    - `start`/`end`: Distance range (meters) to plot (optional, zooms in).
+    - `channels`: List of channels to plot (default: `['Speed', 'Brake', 'Throttle']`).
     """
     analyzer = TelemetryAnalyzer()
     if not analyzer.load_data(filepath):
@@ -250,6 +341,13 @@ async def plot_overlay(
 ) -> str:
     """
     Generate an overlay plot of multiple telemetry laps for comparison.
+    
+    **Args:**
+    - `filepaths`: List of CSV file paths to overlay.
+    - `labels`: Legend labels corresponding to each file.
+    - `output`: Output PNG path.
+    - `start`/`end`: Distance range to plot.
+    - `channels`: Channels to compare (default: Speed, Brake, Throttle).
     """
     analyzer = TelemetryAnalyzer()
     
