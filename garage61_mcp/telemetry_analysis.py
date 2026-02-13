@@ -218,6 +218,7 @@ class TelemetryAnalyzer:
     def plot_sector(self, output_file, start_dist=None, end_dist=None, channels=['Speed', 'Brake', 'Throttle']):
         """
         Generates a plot of the specified channels over distance.
+        start_dist/end_dist should be float values between 0.0 and 1.0 (LapDistPct).
         """
         if self.data is None:
             return False
@@ -255,7 +256,8 @@ class TelemetryAnalyzer:
     def plot_overlay(self, output_file, filepaths, labels=None, start_dist=None, end_dist=None, channels=['Speed', 'Brake', 'Throttle'], markers=None):
         """
         Generates an overlay plot of multiple telemetry files.
-        markers: dict of {dist_pct: "Label"}
+        start_dist/end_dist should be float values between 0.0 and 1.0 (LapDistPct).
+        markers: dict of {dist_pct (float): "Label (str)"} where dist_pct is 0.0 to 1.0.
         """
         if not filepaths:
             return False
