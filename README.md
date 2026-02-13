@@ -125,3 +125,18 @@ To run the server in development mode (although `uv run` is generally fast enoug
 ```bash
 uv run garage61-mcp
 ```
+
+## License
+
+This project is licensed under the MIT License - see the [LICENSE](LICENSE.md) file for details.
+
+## Legal & Privacy Disclaimer
+
+> [!IMPORTANT]
+> **This is an unofficial tool.** This project is not affiliated with, endorsed by, or sponsored by Garage 61.
+
+By using this software, you agree to:
+
+1.  **Respect Garage 61's Terms of Service**: You must comply with the [Garage 61 Terms of Service](https://garage61.net/docs/terms-of-service). Do not use this tool to abuse the API, scrape data excessively, or disrupt their services.
+2.  **Respect Garage 61's Privacy Policy**: You must comply with the [Garage 61 Privacy Policy](https://garage61.net/docs/privacy). Be mindful of how you handle data retrieved from the API.
+3.  **Data Responsibility**: You are solely responsible for the data you access and how you use it. This tool is provided "as is" without warranty of any kind.
