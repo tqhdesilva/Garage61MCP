@@ -249,3 +249,51 @@ class TelemetryAnalyzer:
         plt.savefig(output_file)
         plt.close()
         return True
+
+    def plot_overlay(self, output_file, filepaths, labels=None, start_dist=None, end_dist=None, channels=['Speed', 'Brake', 'Throttle'], markers=None):
+        """
+        Generates an overlay plot of multiple telemetry files.
+        markers: dict of {dist_pct: "Label"}
+        """
+        if not filepaths:
+            return False
+            
+        if labels is None:
+            labels = [f"Lap {i+1}" for i in range(len(filepaths))]
+            
+        fig, axes = plt.subplots(len(channels), 1, figsize=(12, 4 * len(channels)), sharex=True)
+        if len(channels) == 1:
+            axes = [axes]
+            
+        for i, (filepath, label) in enumerate(zip(filepaths, labels)):
+            # Load data temporarily
+            df = pd.read_csv(filepath)
+            
+            if start_dist is not None and end_dist is not None:
+                df = df[(df['LapDistPct'] >= start_dist) & (df['LapDistPct'] <= end_dist)]
+            
+            if len(df) == 0:
+                continue
+                
+            for ax, channel in zip(axes, channels):
+                if channel not in df.columns:
+                    continue
+                ax.plot(df['LapDistPct'], df[channel], label=label)
+                
+        for ax, channel in zip(axes, channels):
+            ax.set_ylabel(channel)
+            ax.grid(True, alpha=0.3)
+            ax.legend()
+            
+            if markers:
+                for dist, text in markers.items():
+                    ax.axvline(x=dist, color='r', linestyle='--', alpha=0.5)
+                    # Only add text to the top plot to avoid clutter
+                    if ax == axes[0]:
+                        ax.text(dist, ax.get_ylim()[1], text, rotation=90, verticalalignment='bottom', color='r')
+
+        axes[-1].set_xlabel('Lap Distance %')
+        plt.tight_layout()
+        plt.savefig(output_file)
+        plt.close()
+        return True

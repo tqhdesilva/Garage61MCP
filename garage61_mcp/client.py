@@ -1,7 +1,11 @@
 import os
 import httpx
 from typing import Optional, List, Dict, Any, Union
-from urllib.parse import urlencode
+from .models import (
+    FindLapsParams, Lap, LapList, Car, Track, Platform, Season, 
+    Team, TeamList, UserStats, TeamStats, UserInfo, Me
+)
+from pydantic import ValidationError
 
 API_BASE_URL = 'https://garage61.net/api/v1'
 
@@ -22,10 +26,11 @@ class Garage61Client:
         self._cars = None
         self._tracks = None
 
-    async def get_me(self) -> Dict[str, Any]:
+    async def get_me(self) -> Me:
+        """Get information about the current user."""
         response = await self.client.get('/me')
         response.raise_for_status()
-        return response.json()
+        return Me.model_validate(response.json())
 
     async def get_my_stats(
         self,
@@ -33,76 +38,89 @@ class Garage61Client:
         end: Optional[str] = None,
         track: Optional[str] = None,
         car: Optional[str] = None
-    ) -> Dict[str, Any]:
+    ) -> UserStats:
+        """Get driving statistics for the current user."""
         params = {}
-        if start:
-            params['start'] = start
-        if end:
-            params['end'] = end
-        if track:
-            params['track'] = track
-        if car:
-            params['car'] = car
+        if start: params['start'] = start
+        if end: params['end'] = end
+        if track: params['track'] = track
+        if car: params['car'] = car
 
         response = await self.client.get('/me/statistics', params=params)
         response.raise_for_status()
-        return response.json()
+        return UserStats.model_validate(response.json())
 
-    async def list_teams(self) -> List[Dict[str, Any]]:
+    async def list_teams(self) -> List[Team]:
+        """List teams the user is a member of."""
         response = await self.client.get('/teams')
         response.raise_for_status()
-        return response.json()
+        data = response.json()
+        return [Team.model_validate(item) for item in data['items']]
 
-    async def get_team_stats(self, team_id: str) -> Dict[str, Any]:
+    async def get_team(self, team_id: str) -> Team:
+        """Get details of a specific team."""
+        response = await self.client.get(f'/teams/{team_id}')
+        response.raise_for_status()
+        return Team.model_validate(response.json())
+
+    async def get_team_stats(self, team_id: str) -> TeamStats:
+        """Get team statistics."""
         response = await self.client.get(f'/teams/{team_id}/statistics')
         response.raise_for_status()
-        return response.json()
+        return TeamStats.model_validate(response.json())
 
-    async def find_laps(self, filters: Dict[str, Any]) -> List[Dict[str, Any]]:
-        # Handle array parameters manually if needed, but httpx handles list of values well
-        # except we might need to join them with commas for this specific API if it expects it
-        # The typescript client did: searchParams.append(key, value.join(','));
-        
-        params = {}
-        for key, value in filters.items():
-            if isinstance(value, list):
-                params[key] = ','.join(map(str, value))
-            elif value is not None:
-                params[key] = str(value)
-                
-        response = await self.client.get('/laps', params=params)
+    async def list_cars(self) -> List[Car]:
+        """List all available cars."""
+        if self._cars:
+            return self._cars
+            
+        response = await self.client.get('/cars')
         response.raise_for_status()
-        return response.json()['items']
+        data = response.json()
+        self._cars = [Car.model_validate(item) for item in data['items']]
+        return self._cars
 
-    async def get_lap_details(self, lap_id: str) -> Dict[str, Any]:
+    async def list_tracks(self) -> List[Track]:
+        """List all available tracks."""
+        if self._tracks:
+            return self._tracks
+            
+        response = await self.client.get('/tracks')
+        response.raise_for_status()
+        data = response.json()
+        self._tracks = [Track.model_validate(item) for item in data['items']]
+        return self._tracks
+
+    async def list_platforms(self) -> List[Platform]:
+        """List available platforms."""
+        response = await self.client.get('/platforms')
+        response.raise_for_status()
+        data = response.json()
+        return [Platform.model_validate(item) for item in data['items']]
+
+    async def find_laps(self, params: FindLapsParams) -> List[Lap]:
+        """Search for laps using robust Pydantic params."""
+        query_params = params.to_query_params()
+        
+        # httpx handles list parameters by repeating keys if passed as list,
+        # but our to_query_params already joined them with commas where needed.
+        # We need to be careful not to double-encode.
+        
+        response = await self.client.get('/laps', params=query_params)
+        response.raise_for_status()
+        data = response.json()
+        
+        # Parse items into Lap models
+        return [Lap.model_validate(item) for item in data['items']]
+
+    async def get_lap_details(self, lap_id: str) -> Lap:
+        """Get details of a specific lap."""
         response = await self.client.get(f'/laps/{lap_id}')
         response.raise_for_status()
-        return response.json()
+        return Lap.model_validate(response.json())
 
     async def get_lap_telemetry(self, lap_id: str) -> str:
-        # Returns CSV string
+        """Get telemetry CSV for a lap."""
         response = await self.client.get(f'/laps/{lap_id}/csv')
         response.raise_for_status()
         return response.text
-
-    # New methods for cars and tracks
-    # Assuming these endpoints exist based on standard REST patterns or API docs
-    # If not, we might need to fetch from another source or they might be static data
-    # The user asked to add "available cars" and "available track"
-    # referencing https://garage61.net/developer/endpoints
-    
-    async def list_cars(self) -> List[Dict[str, Any]]:
-        if self._cars is not None:
-             return self._cars
-        response = await self.client.get('/cars') 
-        response.raise_for_status()
-        self._cars = response.json()['items']
-        return self._cars
-
-    async def list_tracks(self) -> List[Dict[str, Any]]:
-        if self._tracks is not None:
-            return self._tracks
-        response = await self.client.get('/tracks')
-        response.raise_for_status()
-        self._tracks = response.json()['items']
-        return self._tracks
