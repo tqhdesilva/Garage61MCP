@@ -241,6 +241,8 @@ class TelemetryAnalyzer:
                 continue
                 
             ax.plot(df['LapDistPct'], df[channel])
+            if channel in ['Brake', 'Throttle']:
+                ax.set_ylim(0, 1)
             ax.set_ylabel(channel)
             ax.grid(True)
             
@@ -279,6 +281,8 @@ class TelemetryAnalyzer:
                 if channel not in df.columns:
                     continue
                 ax.plot(df['LapDistPct'], df[channel], label=label)
+                if channel in ['Brake', 'Throttle']:
+                    ax.set_ylim(0, 1)
                 
         for ax, channel in zip(axes, channels):
             ax.set_ylabel(channel)
