@@ -48,7 +48,7 @@ class TestGarage61Integration(unittest.IsolatedAsyncioTestCase):
         print("\n  - Testing find_laps (recent)...")
         # Try to find something broader if 7 days returns nothing, or just accept empty list as valid result
         # 'age=30' gives us a better chance of hitting data for a casual user
-        params = FindLapsParams(age=30, limit=5, group=GroupBy.DRIVER)
+        params = FindLapsParams(drivers=["me"], tracks=[57], age=30, limit=5, group=GroupBy.DRIVER)
         laps = await self.client.find_laps(params)
         print(f"    Found {len(laps)} laps (last 30 days).")
         
@@ -64,7 +64,7 @@ class TestGarage61Integration(unittest.IsolatedAsyncioTestCase):
         print("\n  - Testing find_laps (after date)...")
         # 6 months ago to ensure we get data
         date_filter = (datetime.now() - timedelta(days=180)).strftime("%Y-%m-%d")
-        params = FindLapsParams(after=date_filter, limit=5)
+        params = FindLapsParams(drivers=["me"], tracks=[57], after=date_filter, limit=5)
         laps = await self.client.find_laps(params)
         print(f"    Found {len(laps)} laps after {date_filter}.")
         # We don't assert len > 0 because user might be new, but we assert no error raised
@@ -73,7 +73,7 @@ class TestGarage61Integration(unittest.IsolatedAsyncioTestCase):
         """Verify we can download telemetry for a lap."""
         print("\n  - Testing telemetry download...")
         # First find a lap
-        params = FindLapsParams(age=90, limit=1)
+        params = FindLapsParams(drivers=["me"], tracks=[57], age=90, limit=1)
         laps = await self.client.find_laps(params)
         
         if not laps:
@@ -120,7 +120,7 @@ class TestGarage61Integration(unittest.IsolatedAsyncioTestCase):
         """Verify get_lap_details."""
         print("\n  - Testing get_lap_details...")
         # Need a lap ID first
-        params = FindLapsParams(limit=1, age=30)
+        params = FindLapsParams(drivers=["me"], tracks=[57], limit=1, age=30)
         laps = await self.client.find_laps(params)
         
         if not laps:

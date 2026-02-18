@@ -91,6 +91,12 @@ class FindLapsParams(BaseModel):
     offset: int = 0
     group: GroupBy = GroupBy.DRIVER
 
+    @model_validator(mode='after')
+    def check_at_least_one_filter(self) -> 'FindLapsParams':
+        if not self.drivers and not self.cars and not self.tracks:
+            raise ValueError("You will always need to supply at least a track, a car or a driver (user).")
+        return self
+
     @field_validator('after')
     @classmethod
     def parse_after(cls, v):

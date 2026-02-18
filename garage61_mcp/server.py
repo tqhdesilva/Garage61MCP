@@ -131,6 +131,8 @@ async def find_laps(
 ) -> str:
     """
     Search for laps based on various criteria like driver, car, track, and time.
+    
+    **Important:** You will always need to supply at least a track, a car or a driver (user).
 
     **Defaults:**
     - If no time filter (`age` or `after`) is provided, defaults to **last 7 days** (`age=7`).

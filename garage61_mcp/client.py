@@ -102,10 +102,6 @@ class Garage61Client:
         """Search for laps using robust Pydantic params."""
         query_params = params.to_query_params()
         
-        # httpx handles list parameters by repeating keys if passed as list,
-        # but our to_query_params already joined them with commas where needed.
-        # We need to be careful not to double-encode.
-        
         response = await self.client.get('/laps', params=query_params)
         response.raise_for_status()
         data = response.json()
