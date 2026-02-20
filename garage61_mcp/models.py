@@ -3,6 +3,25 @@ from enum import Enum
 from pydantic import BaseModel, Field, field_validator, model_validator, ConfigDict
 from datetime import datetime, date
 
+# --- Track Context Models ---
+
+class TrackCorner(BaseModel):
+    number: str
+    name: Optional[str] = None
+    start_pct: float
+    end_pct: float
+
+class TrackSector(BaseModel):
+    sector_num: int
+    sector_start_pct: float
+    
+class TrackMapData(BaseModel):
+    track_id: Union[int, str]
+    track_name: str
+    config_name: Optional[str] = None
+    corners: List[TrackCorner]
+    sectors: List[TrackSector]
+
 class SessionType(int, Enum):
     PRACTICE = 1
     QUALIFYING = 2

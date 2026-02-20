@@ -21,6 +21,42 @@ class TelemetryAnalyzer:
             print(f"Error loading data: {e}")
             return False
 
+    def enrich_data(self, track_map):
+        """
+        Enrich telemetry data with Sector and Corner columns based on TrackMapData.
+        """
+        if self.data is None or track_map is None:
+            return
+
+        # Initialize new columns
+        self.data['Sector'] = None
+        self.data['Corner'] = None
+
+        # Assign Sectors
+        # Sectors are ordered by sector_num
+        for i, sector in enumerate(track_map.sectors):
+            s_start = sector.sector_start_pct
+            s_end = track_map.sectors[i+1].sector_start_pct if i + 1 < len(track_map.sectors) else 1.0
+            
+            # Handle standard case
+            mask = (self.data['LapDistPct'] >= s_start) & (self.data['LapDistPct'] < s_end)
+            
+            # Handle cases where sector wraps around the start/finish line (if any)
+            if s_start > s_end:
+                 mask = (self.data['LapDistPct'] >= s_start) | (self.data['LapDistPct'] < s_end)
+                 
+            self.data.loc[mask, 'Sector'] = sector.sector_num
+
+        # Assign Corners
+        for corner in track_map.corners:
+            mask = (self.data['LapDistPct'] >= corner.start_pct) & (self.data['LapDistPct'] <= corner.end_pct)
+            if corner.start_pct > corner.end_pct:
+                 # Wrap around start/finish
+                 mask = (self.data['LapDistPct'] >= corner.start_pct) | (self.data['LapDistPct'] <= corner.end_pct)
+            
+            # Assign corner name (or number)
+            self.data.loc[mask, 'Corner'] = corner.number
+
     def analyze_braking(self):
         """
         Identifies braking zones.
@@ -63,13 +99,15 @@ class TelemetryAnalyzer:
             end_dist = zone_data['LapDistPct'].iloc[-1]
             
             braking_zones.append({
-                'start_idx': start,
-                'end_idx': end,
-                'start_dist_pct': start_dist,
-                'end_dist_pct': end_dist,
-                'initial_speed': input_speed,
-                'min_speed': min_speed,
-                'max_brake_pressure': max_brake
+                'start_idx': int(start),
+                'end_idx': int(end),
+                'start_dist_pct': float(start_dist),
+                'end_dist_pct': float(end_dist),
+                'initial_speed': float(input_speed),
+                'min_speed': float(min_speed),
+                'max_brake_pressure': float(max_brake),
+                'sector': int(zone_data['Sector'].mode()[0]) if 'Sector' in self.data and not zone_data['Sector'].isna().all() else None,
+                'corner': str(zone_data['Corner'].dropna().iloc[0]) if 'Corner' in self.data and not zone_data['Corner'].dropna().empty else None
             })
             
         return braking_zones
@@ -204,6 +242,78 @@ class TelemetryAnalyzer:
             })
             
         return dataset_sectors
+
+    def analyze_corner_stats(self, start_dist, end_dist):
+        """
+        Analyzes detailed stats for a specific corner or complex.
+        start_dist/end_dist: float values between 0.0 and 1.0 (LapDistPct).
+        """
+        if self.data is None:
+            return None
+
+        mask = (self.data['LapDistPct'] >= start_dist) & (self.data['LapDistPct'] <= end_dist)
+        data = self.data[mask].copy()
+        
+        if data.empty:
+            return None
+
+        # 1. Apex Speed & Location
+        apex_idx = data['Speed'].idxmin()
+        apex = data.loc[apex_idx]
+        
+        # 2. Braking Point (First point > 5% pressure)
+        brake_active = data[data['Brake'] > 0.05]
+        brake_point = None
+        if not brake_active.empty:
+            idx = brake_active.index[0]
+            row = data.loc[idx]
+            brake_point = {
+                'dist_pct': float(row['LapDistPct']),
+                'speed_kph': float(row['Speed'] * 3.6),
+                'pressure': float(data['Brake'].max())
+            }
+
+        # 3. Turn-in Point (First point where absolute steering > 0.05 rad)
+        steer_active = data[data['SteeringWheelAngle'].abs() > 0.05]
+        turn_in_point = None
+        if not steer_active.empty:
+            idx = steer_active.index[0]
+            row = data.loc[idx]
+            turn_in_point = {
+                'dist_pct': float(row['LapDistPct']),
+                'speed_kph': float(row['Speed'] * 3.6),
+                'angle_rad': float(row['SteeringWheelAngle'])
+            }
+
+        # 4. Brake to Turn-in Distance (Estimate using 6213m as baseline if not provided)
+        # Note: In a production tool, track length would be part of metadata.
+        brake_to_turn_in_pct = None
+        if brake_point and turn_in_point:
+            brake_to_turn_in_pct = turn_in_point['dist_pct'] - brake_point['dist_pct']
+
+        # 5. Full Throttle Exit (First point > 99% after apex)
+        exit_active = data[(data.index >= apex_idx) & (data['Throttle'] > 0.99)]
+        exit_point = None
+        if not exit_active.empty:
+            idx = exit_active.index[0]
+            row = data.loc[idx]
+            exit_point = {
+                'dist_pct': float(row['LapDistPct']),
+                'dist_after_apex_pct': float(row['LapDistPct'] - apex['LapDistPct']),
+                'speed_kph': float(row['Speed'] * 3.6)
+            }
+
+        return {
+            'apex': {
+                'dist_pct': float(apex['LapDistPct']),
+                'speed_kph': float(apex['Speed'] * 3.6)
+            },
+            'braking': brake_point,
+            'turn_in': turn_in_point,
+            'brake_to_turn_in_pct': brake_to_turn_in_pct,
+            'max_steering_rad': float(data['SteeringWheelAngle'].abs().max()),
+            'exit_throttle': exit_point
+        }
 
     def get_driving_line(self, downsample_factor=10):
         """
