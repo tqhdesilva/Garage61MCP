@@ -1,0 +1,3 @@
+[submodule "external/lovely-track-data"]
+	path = external/lovely-track-data
+	url = https://github.com/Lovely-Sim-Racing/lovely-track-data

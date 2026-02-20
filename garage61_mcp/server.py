@@ -11,6 +11,7 @@ load_dotenv()
 from .client import Garage61Client
 from .models import FindLapsParams, Lap, Car, Track, Team
 from .telemetry_analysis import TelemetryAnalyzer
+from .track_data import TrackDataManager
 
 # Initialize FastMCP server
 mcp = FastMCP("garage61-mcp-server")
@@ -18,6 +19,8 @@ mcp = FastMCP("garage61-mcp-server")
 # Initialize Garage61 Client
 client = Garage61Client()
 
+# Initialize Track Data Manager (loads JSON files)
+track_manager = TrackDataManager()
 
 @mcp.tool()
 async def get_me() -> str:
@@ -249,9 +252,13 @@ async def get_lap_telemetry(lap_id: str) -> str:
 
 
 @mcp.tool()
-async def analyze_telemetry(filepath: str) -> str:
+async def analyze_telemetry(filepath: str, track_name: Optional[str] = None) -> str:
     """
     Analyze a local telemetry CSV file to extract performance metrics.
+    
+    **Args:**
+    - `filepath`: Path to the local CSV file.
+    - `track_name`: Optional track name to enrich outputs with sector/corner data (e.g. "Mount Panorama").
     
     **Outputs:**
     - `summary`: Max/Avg speed, total samples.
@@ -263,6 +270,11 @@ async def analyze_telemetry(filepath: str) -> str:
     analyzer = TelemetryAnalyzer()
     if not analyzer.load_data(filepath):
         return "Error loading telemetry data. Please check the file path and format."
+        
+    if track_name:
+        track_map = track_manager.get_track_data(track_name)
+        if track_map:
+            analyzer.enrich_data(track_map)
         
     results = {
         'braking_zones': analyzer.analyze_braking(),
@@ -380,6 +392,34 @@ async def plot_overlay(
         return f"Overlay plot generated at {output}"
     else:
         return "Error generating overlay plot."
+
+@mcp.tool()
+async def get_corner_stats(
+    filepath: str,
+    start: float,
+    end: float
+) -> str:
+    """
+    Get detailed performance metrics for a specific corner or sector.
+    
+    **Args:**
+    - `filepath`: Path to the CSV telemetry file.
+    - `start`: Start of the sector as a percentage of the lap (0.0 to 1.0).
+    - `end`: End of the sector as a percentage of the lap (0.0 to 1.0).
+    
+    **Returns:**
+    - JSON string containing apex speed, braking point, turn-in point, and exit throttle stats.
+    """
+    analyzer = TelemetryAnalyzer()
+    if not analyzer.load_data(filepath):
+        return "Error loading telemetry data."
+        
+    stats = analyzer.analyze_corner_stats(start, end)
+    if stats is None:
+        return "No data found in the specified range."
+        
+    return json.dumps(stats, indent=2)
+
 
 def main():
     mcp.run(transport='stdio')
