@@ -58,11 +58,10 @@ class FindLapsParams(BaseModel):
     # Core Filters
     drivers: Optional[List[str]] = Field(None, description="List of driver slugs, 'me', or 'following'")
     cars: Optional[List[int]] = Field(None, description="Car IDs")
-    tracks: Optional[List[int]] = Field(None, description="Track IDs")
+    tracks: List[int] = Field(..., min_length=1, description="Track IDs (Strictly required by Garage61 API)")
     teams: Optional[List[str]] = Field(None, description="Team slugs")
     seasons: Optional[List[int]] = Field(None, description="Season IDs")
     event: Optional[str] = Field(None, description="Event ID")
-    session: Optional[str] = Field(None, description="Session ID")
     
     # Enum Filters
     session_types: Optional[List[SessionType]] = Field(None, alias="sessionTypes")
@@ -109,12 +108,6 @@ class FindLapsParams(BaseModel):
     limit: int = Field(10, le=1000)
     offset: int = 0
     group: GroupBy = GroupBy.DRIVER
-
-    @model_validator(mode='after')
-    def check_at_least_one_filter(self) -> 'FindLapsParams':
-        if not self.drivers and not self.cars and not self.tracks:
-            raise ValueError("You will always need to supply at least a track, a car or a driver (user).")
-        return self
 
     @field_validator('after')
     @classmethod

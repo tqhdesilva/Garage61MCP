@@ -115,9 +115,9 @@ async def list_tracks() -> str:
 
 @mcp.tool()
 async def find_laps(
+    tracks: List[int],
     drivers: Optional[List[str]] = None,
     cars: Optional[List[int]] = None,
-    tracks: Optional[List[int]] = None,
     teams: Optional[List[str]] = None,
     seasons: Optional[List[int]] = None,
     session_types: Optional[List[int]] = None,
@@ -135,7 +135,7 @@ async def find_laps(
     """
     Search for laps based on various criteria like driver, car, track, and time.
     
-    **Important:** You will always need to supply at least a track, a car or a driver (user).
+    **Important:** The Garage61 API strictly requires you to supply at least one track ID in the `tracks` parameter for all searches.
 
     **Defaults:**
     - If no time filter (`age` or `after`) is provided, defaults to **last 7 days** (`age=7`).
