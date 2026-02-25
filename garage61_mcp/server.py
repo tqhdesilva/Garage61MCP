@@ -27,11 +27,13 @@ async def get_me() -> str:
     """
     Get information about the currently authenticated user.
     
-    Returns details like:
-    - `id`, `slug`, `firstName`, `lastName`
-    - `subscriptionPlan`
-    - `teams` (list of teams the user belongs to)
-    - `apiPermissions`
+    Get information about the currently authenticated user.
+    
+    Returns a comprehensive JSON string detailing the user's profile:
+    - Basic identifiers (`id`, `slug`, `firstName`, `lastName`). The `slug` is critically important as it represents the user in other endpoints (e.g., driver filtering).
+    - Their active `subscriptionPlan`.
+    - A list of `teams` the user belongs to. Use this out output to get team IDs and slugs for queries.
+    - `apiPermissions` granted to the token.
     """
     user = await client.get_me()
     return user.model_dump_json(indent=2, by_alias=True)
@@ -45,9 +47,13 @@ async def get_my_stats(
     car: Optional[str] = None
 ) -> str:
     """
-    Get driving statistics for the authenticated user.
+    Get driving statistics and aggregated telemetry profiles for the authenticated user.
     
-    Returns a list of `drivingStatistics` entries containing aggregated data.
+    This is extremely useful as a discovery endpoint to find out which tracks and cars the 
+    user has driven recently, rather than guessing IDs blindly.
+
+    Returns a JSON list of `drivingStatistics` entries containing aggregated data per day/car/track combo.
+    Each entry typically contains: `day` (date string), `user` (slug), `car` (ID), and `track` (ID).
     
     **Filters:**
     - `start`: ISO datetime string (e.g., `2023-01-01`).
@@ -65,9 +71,13 @@ async def list_teams() -> str:
     """
     List all teams that the authenticated user is a member of.
     
-    Returns a list of teams, where each team contains:
-    - `id`, `name`, `slug`
-    - `members` (if available in the summary)
+    List all teams that the authenticated user is a member of.
+    
+    Returns a JSON formatted list of teams, where each team contains:
+    - `id` (string identifier for queries like get_team_stats).
+    - `name` (display string).
+    - `slug` (string identifier, useful for finding laps representing the team).
+    - `members` (summary of drivers on the team).
     """
     teams = await client.list_teams()
     return json.dumps([t.model_dump(mode='json') for t in teams], indent=2)
@@ -75,12 +85,16 @@ async def list_teams() -> str:
 @mcp.tool()
 async def get_team_stats(team_id: str) -> str:
     """
-    Get driving statistics for a specific team.
+    Get driving statistics and aggregated telemetry profiles for an entire team.
     
-    Returns aggregated `drivingStatistics` for all members of the team.
+    This is extremely useful as a discovery endpoint to find out which tracks and cars 
+    the team members have driven recently, so you can formulate precise laps queries.
+
+    Returns a JSON payload with a `drivingStatistics` array containing aggregated data per day/car/track combo.
+    Each entry typically contains: `day` (date string), `user` (driver slug), `car` (ID), and `track` (ID).
     
     **Args:**
-    - `team_id`: The unique ID of the team (e.g., from `list_teams`).
+    - `team_id`: The unique string ID of the team (e.g., obtained from `list_teams`).
     """
     stats = await client.get_team_stats(team_id)
     return stats.model_dump_json(indent=2)
@@ -133,13 +147,22 @@ async def find_laps(
     offset: int = 0,
 ) -> str:
     """
-    Search for laps based on various criteria like driver, car, track, and time.
+    Search the database for laps based on various criteria like driver, car, track, and time.
     
-    **Important:** The Garage61 API strictly requires you to supply at least one track ID in the `tracks` parameter for all searches.
+    **CRITICAL WORKFLOW REQUIREMENT:** 
+    The Garage61 API strictly requires you to supply at least one track ID in the `tracks` parameter for all searches. 
+    If you do not know the `tracks` ID to search for, DO NOT guess it. Instead, you MUST first discover 
+    recent track activity by using the `get_team_stats` or `get_my_stats` tool first to find which tracks 
+    were driven on recently. Once you extract a valid `track` ID from the stats results, you may query this tool.
+
+    **Returns:**
+    A JSON string representing a list of `Lap` objects matching your criteria. Each lap contains its unique `id` 
+    (used to download CSV telemetry), `driver` profile, `lapTime` (float in seconds), `date`, and `clean` status.
 
     **Defaults:**
-    - If no time filter (`age` or `after`) is provided, defaults to **last 7 days** (`age=7`).
-    - Defaults to grouping by driver (`group='driver'`). To get individual laps, use `group='none'`.
+    - If no time filter (`age` or `after`) is provided, defaults to finding laps from the **last 7 days** (`age=7`).
+    - Defaults to grouping by driver (`group='driver'`), which returns the single best lap for each driver. 
+      To get all individual chronological laps, you MUST use `group='none'`.
 
     **Parameters:**
     - `drivers`: Who to search for. 
@@ -209,10 +232,12 @@ async def get_lap_details(lap_id: str) -> str:
     """
     Get detailed information for a specific lap.
     
-    Returns a `Lap` object containing:
-    - Basic info: `id`, `lapTime`, `date`, `clean` status
-    - Entities: `driver` (UserInfo), `car`, `track`
-    - `sectors`: List of sector times and splits
+    Get detailed information for a specific lap.
+    
+    Returns a comprehensive JSON string of a `Lap` object containing:
+    - Basic info: `id`, `lapTime` (total seconds), `date` (ISO time of the lap), `clean` (boolean).
+    - Entities: `driver` (UserInfo including the slug), `car`, `track`.
+    - `sectors`: An array of timing details for individual track sectors on this specific lap.
     """
     try:
         lap = await client.get_lap_details(lap_id)
