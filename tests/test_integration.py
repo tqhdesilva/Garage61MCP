@@ -63,7 +63,7 @@ class TestGarage61Integration(unittest.IsolatedAsyncioTestCase):
         """Verify searching for laps after a specific date."""
         print("\n  - Testing find_laps (after date)...")
         # 6 months ago to ensure we get data
-        date_filter = (datetime.now() - timedelta(days=180)).strftime("%Y-%m-%d")
+        date_filter = (datetime.now() - timedelta(days=180)).strftime("%Y-%m-%dT00:00:00Z")
         params = FindLapsParams(drivers=["me"], tracks=[57], after=date_filter, limit=5)
         laps = await self.client.find_laps(params)
         print(f"    Found {len(laps)} laps after {date_filter}.")
@@ -105,9 +105,25 @@ class TestGarage61Integration(unittest.IsolatedAsyncioTestCase):
             
             # Get team stats
             print(f"    Testing stats for team: {team.id}")
-            stats = await self.client.get_team_stats(team.id)
+            start_date = (datetime.now() - timedelta(days=14)).strftime("%Y-%m-%dT00:00:00Z")
+            end_date = (datetime.now() - timedelta(days=7)).strftime("%Y-%m-%dT00:00:00Z")
+            stats = await self.client.get_team_stats(team.id, start=start_date, end=end_date)
             self.assertIsNotNone(stats.drivingStatistics)
             self.assertIsInstance(stats.drivingStatistics, list)
+            
+            # Get team stats for specific track
+            track_id = 57 # Daytona
+            print(f"    Testing stats for team on track: {track_id}")
+            track_stats = await self.client.get_team_stats(team.id, start=start_date, end=end_date, track=str(track_id))
+            self.assertIsNotNone(track_stats.drivingStatistics)
+            self.assertIsInstance(track_stats.drivingStatistics, list)
+            
+            # Get team stats for specific car
+            car_id = 117 # Porsche 911 GT3 R
+            print(f"    Testing stats for team on car: {car_id}")
+            car_stats = await self.client.get_team_stats(team.id, start=start_date, end=end_date, car=str(car_id))
+            self.assertIsNotNone(car_stats.drivingStatistics)
+            self.assertIsInstance(car_stats.drivingStatistics, list)
             
     async def test_06_my_stats(self):
         """Verify user statistics."""

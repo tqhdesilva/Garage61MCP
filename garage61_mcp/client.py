@@ -63,9 +63,22 @@ class Garage61Client:
         response.raise_for_status()
         return Team.model_validate(response.json())
 
-    async def get_team_stats(self, team_id: str) -> TeamStats:
+    async def get_team_stats(
+        self,
+        team_id: str,
+        start: Optional[str] = None,
+        end: Optional[str] = None,
+        track: Optional[str] = None,
+        car: Optional[str] = None
+    ) -> TeamStats:
         """Get team statistics."""
-        response = await self.client.get(f'/teams/{team_id}/statistics')
+        params = {}
+        if start: params['start'] = start
+        if end: params['end'] = end
+        if track: params['track'] = track
+        if car: params['car'] = car
+
+        response = await self.client.get(f'/teams/{team_id}/statistics', params=params)
         response.raise_for_status()
         return TeamStats.model_validate(response.json())
 

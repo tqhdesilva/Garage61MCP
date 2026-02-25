@@ -1,6 +1,6 @@
 import os
 import json
-from datetime import date
+from datetime import date, datetime, timedelta, timezone
 from typing import List, Optional
 from fastmcp import FastMCP
 from dotenv import load_dotenv
@@ -83,7 +83,13 @@ async def list_teams() -> str:
     return json.dumps([t.model_dump(mode='json') for t in teams], indent=2)
 
 @mcp.tool()
-async def get_team_stats(team_id: str) -> str:
+async def get_team_stats(
+    team_id: str,
+    start: Optional[str] = None,
+    end: Optional[str] = None,
+    track: Optional[str] = None,
+    car: Optional[str] = None
+) -> str:
     """
     Get driving statistics and aggregated telemetry profiles for an entire team.
     
@@ -95,8 +101,16 @@ async def get_team_stats(team_id: str) -> str:
     
     **Args:**
     - `team_id`: The unique string ID of the team (e.g., obtained from `list_teams`).
+    - `start`: ISO datetime string. Defaults to 1 week ago if neither start nor end is provided.
+    - `end`: ISO datetime string.
+    - `track`: Filter by track name or ID.
+    - `car`: Filter by car name or ID.
     """
-    stats = await client.get_team_stats(team_id)
+    if start is None and end is None:
+        start_dt = datetime.now(timezone.utc) - timedelta(days=7)
+        start = start_dt.isoformat().replace('+00:00', 'Z')
+
+    stats = await client.get_team_stats(team_id, start=start, end=end, track=track, car=car)
     return stats.model_dump_json(indent=2)
 
 @mcp.tool()
