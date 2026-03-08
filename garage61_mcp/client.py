@@ -1,3 +1,4 @@
+import asyncio
 import os
 import httpx
 from typing import Optional, List, Dict, Any, Union
@@ -15,16 +16,42 @@ class Garage61Client:
         if not self.token:
             raise ValueError('GARAGE61_TOKEN environment variable is required')
 
-        self.client = httpx.AsyncClient(
-            base_url=API_BASE_URL,
-            headers={
-                'Authorization': f'Bearer {self.token}',
-                'Content-Type': 'application/json',
-            },
-            timeout=60.0
-        )
+        self._client: Optional[httpx.AsyncClient] = None
+        self._loop: Optional[asyncio.AbstractEventLoop] = None
         self._cars = None
         self._tracks = None
+
+    @property
+    def client(self) -> httpx.AsyncClient:
+        """
+        Lazy-initialize the httpx client and ensure it's on the current event loop.
+        If the loop has changed (common in tests), re-initialize the session.
+        """
+        try:
+            current_loop = asyncio.get_running_loop()
+        except RuntimeError:
+            # Fallback if called outside a running loop, though rare for this client
+            current_loop = None
+
+        if self._client is None or self._client.is_closed or self._loop != current_loop:
+            if self._client and not self._client.is_closed:
+                # Close the old client if it's on a dead loop
+                # Note: We don't await here as this is a property, 
+                # but AsyncClient.close() is async. In practice, 
+                # httpx handles loop closure cleanup reasonably well.
+                pass
+                
+            self._client = httpx.AsyncClient(
+                base_url=API_BASE_URL,
+                headers={
+                    'Authorization': f'Bearer {self.token}',
+                    'Content-Type': 'application/json',
+                },
+                timeout=60.0
+            )
+            self._loop = current_loop
+            
+        return self._client
 
     async def get_me(self) -> Me:
         """Get information about the current user."""

@@ -44,18 +44,29 @@ uv run garage61-mcp
 
 ### Testing
 
-Tests are located in the `tests/` directory.
+The project uses `pytest` for testing.
 
+- **Unit Tests:** Located in `tests/test_models.py`, etc.
+- **Integration Tests:** Designated with `@pytest.mark.integration` and interact with the real Garage61 API. These are long-running and require a `GARAGE61_TOKEN`.
+    - `tests/test_client_integration.py`: Verifies the `Garage61Client` and raw API connectivity.
+    - `tests/test_server_integration.py`: Verifies the MCP server tools and end-to-end workflows.
+
+To run all tests:
 ```bash
-# Run all tests
 uv run pytest
+```
 
-# Run integration tests (requires GARAGE61_TOKEN)
-uv run pytest tests/test_integration.py
+To run only unit tests (skipping integration):
+```bash
+uv run pytest -m "not integration"
+```
+
+To run only integration tests:
+```bash
+uv run pytest -m integration
 ```
 
 ### Adding New Tools
-
 1.  Define the Pydantic model in `garage61_mcp/models.py` if needed.
 2.  Add the API method to `Garage61Client` in `garage61_mcp/client.py`.
 3.  Register the tool in `garage61_mcp/server.py` using the `@mcp.tool()` decorator.
@@ -84,6 +95,12 @@ async def verify():
 
 asyncio.run(verify())
 ```
+
+
+### Workspace Integrity
+- **Submodules:** Avoid running `git clean` or modifications within `external/` directories unless explicitly working on submodule data, as these are managed independently.
+- **Test Locations:** Always use `tests/` for project tests. Avoid root-level test scripts to prevent import mismatches during `pytest` collection.
+- **Dependency Management:** Use `uv run python -m unittest discover tests` if `pytest` is not available in the environment, or add it as a dev dependency via `uv add --dev pytest`.
 
 ## External Data
 

@@ -1,6 +1,7 @@
 import unittest
 import os
 import sys
+import pytest
 from datetime import datetime, timedelta
 from dotenv import load_dotenv
 
@@ -12,7 +13,8 @@ from garage61_mcp.models import FindLapsParams, GroupBy
 
 load_dotenv()
 
-class TestGarage61Integration(unittest.IsolatedAsyncioTestCase):
+@pytest.mark.integration
+class TestGarage61ClientIntegration(unittest.IsolatedAsyncioTestCase):
     async def asyncSetUp(self):
         self.token = os.environ.get('GARAGE61_TOKEN')
         if not self.token:

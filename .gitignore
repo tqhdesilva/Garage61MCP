@@ -21,7 +21,15 @@ yarn-error.log*
 .DS_Store
 Thumbs.db
 
-# Python virtual environment
+# Python
 .venv
-__pycache__
+__pycache__/
+**/__pycache__/
+*.py[cod]
+*$py.class
 .python-version
+
+# Tests & Coverage
+.pytest_cache/
+.coverage
+htmlcov/

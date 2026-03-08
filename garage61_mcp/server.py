@@ -435,6 +435,43 @@ async def plot_overlay(
         return "Error generating overlay plot."
 
 @mcp.tool()
+async def plot_racing_line(
+    filepaths: List[str],
+    labels: Optional[List[str]] = None,
+    output: Optional[str] = None,
+    start: Optional[float] = None,
+    end: Optional[float] = None
+) -> str:
+    """
+    Generate a racing line plot (Lat/Lon) for one or more telemetry laps.
+    
+    **Args:**
+    - `filepaths`: List of CSV file paths to overlay.
+    - `labels`: Legend labels corresponding to each file.
+    - `output`: Output PNG path.
+    - `start`/`end`: Distance range to plot as a percentage of the lap (0.0 to 1.0).
+    """
+    analyzer = TelemetryAnalyzer()
+    
+    if output is None:
+        import tempfile
+        fd, output = tempfile.mkstemp(suffix='.png', prefix='racing_line_')
+        os.close(fd)
+        
+    success = analyzer.plot_racing_line(
+        output_file=output,
+        filepaths=filepaths,
+        labels=labels,
+        start_dist=start,
+        end_dist=end
+    )
+    
+    if success:
+        return f"Racing line plot generated at {output}"
+    else:
+        return "Error generating racing line plot."
+
+@mcp.tool()
 async def get_corner_stats(
     filepath: str,
     start: float,

@@ -193,27 +193,6 @@ class TelemetryAnalyzer:
     def analyze_sectors(self, num_sectors=3):
         """
         Divides the lap into `num_sectors` by distance and calculates time spent in each.
-        Since we don't have 'Time' column explicitly in the snippet header, 
-        we might need to integrate if frequency is constant, or check if 'Time' exists or can be derived.
-        The snippet showed: Speed, LapDistPct, etc. 
-        Usually data is sampled at a rate (e.g. 60Hz). 
-        If 'Time' isn't there, we can estimate delta_t = delta_dist / avg_speed, 
-        but usually telemetry has a time step.
-        Looking at the snippet from `head` command:
-        Rows don't have a Time column but have mostly constant Lat/Lon/Dist steps? 
-        Wait, I don't see a Time column in the CSV header I saw earlier:
-        "Speed,LapDistPct,Lat,Lon,Brake,Throttle,RPM,SteeringWheelAngle,..."
-        But typically telemetry is time-series.
-        Let's assume constant sample rate or we can't easily calculate time without distance/speed integration.
-        For now, let's try to derive time delta from distance and speed.
-        dt = d_dist / speed.
-        LapDistPct is 0 to 1? Or 0.0002...
-        If it is percentage, we need Track Length to get actual distance.
-        Without Track Length, we can only compare relative "time cost" if we assume a track length.
-        However, usually `LapDistPct` * TrackLength = Distance.
-        Let's assume we just want to compare segments.
-        Actually, we can try to estimate relative time loss just by evaluating average speed in sectors.
-        Higher average speed = lower time.
         """
         if self.data is None:
             return {}
@@ -238,7 +217,6 @@ class TelemetryAnalyzer:
             dataset_sectors.append({
                 'sector': i+1,
                 'avg_speed': avg_speed,
-                # 'estimated_time_factor': (s_end - s_start) / avg_speed if avg_speed > 0 else 0
             })
             
         return dataset_sectors
@@ -285,8 +263,7 @@ class TelemetryAnalyzer:
                 'angle_rad': float(row['SteeringWheelAngle'])
             }
 
-        # 4. Brake to Turn-in Distance (Estimate using 6213m as baseline if not provided)
-        # Note: In a production tool, track length would be part of metadata.
+        # 4. Brake to Turn-in Distance
         brake_to_turn_in_pct = None
         if brake_point and turn_in_point:
             brake_to_turn_in_pct = turn_in_point['dist_pct'] - brake_point['dist_pct']
@@ -329,7 +306,6 @@ class TelemetryAnalyzer:
     def plot_sector(self, output_file, start_dist=None, end_dist=None, channels=['Speed', 'Brake', 'Throttle']):
         """
         Generates a plot of the specified channels over distance.
-        start_dist/end_dist should be float values between 0.0 and 1.0 (LapDistPct).
         """
         if self.data is None:
             return False
@@ -367,8 +343,6 @@ class TelemetryAnalyzer:
     def plot_overlay(self, output_file, filepaths, labels=None, start_dist=None, end_dist=None, channels=['Speed', 'Brake', 'Throttle'], markers=None):
         """
         Generates an overlay plot of multiple telemetry files.
-        start_dist/end_dist should be float values between 0.0 and 1.0 (LapDistPct).
-        markers: dict of {dist_pct (float): "Label (str)"} where dist_pct is 0.0 to 1.0.
         """
         if not filepaths:
             return False
@@ -385,7 +359,11 @@ class TelemetryAnalyzer:
             df = pd.read_csv(filepath)
             
             if start_dist is not None and end_dist is not None:
-                df = df[(df['LapDistPct'] >= start_dist) & (df['LapDistPct'] <= end_dist)]
+                if start_dist > end_dist:
+                    mask = (df['LapDistPct'] >= start_dist) | (df['LapDistPct'] <= end_dist)
+                else:
+                    mask = (df['LapDistPct'] >= start_dist) & (df['LapDistPct'] <= end_dist)
+                df = df[mask]
             
             if len(df) == 0:
                 continue
@@ -405,12 +383,52 @@ class TelemetryAnalyzer:
             if markers:
                 for dist, text in markers.items():
                     ax.axvline(x=dist, color='r', linestyle='--', alpha=0.5)
-                    # Only add text to the top plot to avoid clutter
                     if ax == axes[0]:
                         ax.text(dist, ax.get_ylim()[1], text, rotation=90, verticalalignment='bottom', color='r')
 
         axes[-1].set_xlabel('Lap Distance %')
         plt.tight_layout()
         plt.savefig(output_file)
+        plt.close()
+        return True
+
+    def plot_racing_line(self, output_file, filepaths, labels=None, start_dist=None, end_dist=None):
+        """
+        Generates a racing line plot (Lat vs Lon) for one or more telemetry files.
+        """
+        if not filepaths:
+            return False
+            
+        if labels is None:
+            labels = [f"Lap {i+1}" for i in range(len(filepaths))]
+            
+        # 10x10 figure with 300 DPI for sharp detail
+        plt.figure(figsize=(10, 10))
+        
+        for filepath, label in zip(filepaths, labels):
+            df = pd.read_csv(filepath)
+            
+            if start_dist is not None and end_dist is not None:
+                if start_dist > end_dist:
+                    mask = (df['LapDistPct'] >= start_dist) | (df['LapDistPct'] <= end_dist)
+                else:
+                    mask = (df['LapDistPct'] >= start_dist) & (df['LapDistPct'] <= end_dist)
+                df = df[mask]
+            
+            if df.empty:
+                continue
+                
+            # Use thinner lines (linewidth=0.5) and alpha (0.6) to show overlap clearly
+            plt.plot(df['Lon'], df['Lat'], label=label, linewidth=0.5, alpha=0.6)
+            
+        plt.xlabel('Longitude')
+        plt.ylabel('Latitude')
+        plt.title('Racing Line Comparison')
+        plt.legend()
+        plt.grid(True, alpha=0.2) # Finer grid lines
+        plt.axis('equal')
+        
+        plt.tight_layout()
+        plt.savefig(output_file, dpi=300) # High 300 DPI for sharp zooming
         plt.close()
         return True
