@@ -7,14 +7,14 @@ This project is a Model Context Protocol (MCP) server that provides AI agents wi
 - **Security:** Never log or expose the `GARAGE61_TOKEN`.
 - **API Efficiency:** The Garage61 API has rate limits. When searching for laps or statistics, always use specific filters (car, track, driver) to minimize payload size.
 - **Telemetry Workflow:** Telemetry analysis is a two-step process:
-    1.  Download telemetry to a local CSV using `get_lap_telemetry`.
-    2.  Analyze or plot the local file using `analyze_telemetry`, `plot_telemetry`, or `plot_overlay`.
+    1.  Download telemetry to a local CSV using `garage61_get_lap_telemetry`.
+    2.  Analyze or plot the local file using `garage61_analyze_telemetry`, `garage61_plot_telemetry`, or `garage61_plot_overlay`.
 
 ## Architecture & Technology Stack
 
 - **Language:** Python 3.10+
 - **Dependency Management:** [uv](https://github.com/astral-sh/uv)
-- **MCP Framework:** [fastmcp](https://github.com/jlowin/fastmcp)
+- **MCP Framework:** [fastmcp](https://github.com/jlowin/fastmcp) (v3.1.0+)
 - **API Client:** `httpx` (async)
 - **Data Analysis:** `pandas`, `numpy`
 - **Visualization:** `matplotlib`
@@ -58,7 +58,32 @@ uv run pytest tests/test_integration.py
 
 1.  Define the Pydantic model in `garage61_mcp/models.py` if needed.
 2.  Add the API method to `Garage61Client` in `garage61_mcp/client.py`.
-3.  Register the tool in `garage61_mcp/server.py` using the `@mcp.tool()` decorator. Ensure the docstring is comprehensive as it's used as the tool description for the AI.
+3.  Register the tool in `garage61_mcp/server.py` using the `@mcp.tool()` decorator.
+4.  **Namespacing:** All tools are automatically prefixed with `garage61_` via the `Namespace` transform in `server.py`. You do not need to add the prefix manually in the decorator.
+5.  Ensure the docstring is comprehensive as it's used as the tool description for the AI.
+
+## Maintenance & Procedural Learnings
+
+### Upgrading Dependencies with `uv`
+To force a major version upgrade of a dependency (e.g., upgrading `fastmcp` from 2.x to 3.x), use the explicit version specifier:
+```bash
+uv add "fastmcp>=3.1.0"
+```
+Simply running `uv add fastmcp` may not always trigger a major version bump if the existing lockfile constraints are satisfied by an older version.
+
+### Verifying MCP Tools
+In `fastmcp` 3.x, tools are registered and managed asynchronously. To programmatically verify the exposed tool names (including applied transforms like `Namespace`), use the following pattern:
+```python
+import asyncio
+from garage61_mcp.server import mcp
+
+async def verify():
+    tools = await mcp.list_tools()
+    for t in tools:
+        print(t.name)
+
+asyncio.run(verify())
+```
 
 ## External Data
 

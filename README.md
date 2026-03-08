@@ -99,18 +99,18 @@ uv run garage61-mcp
 
 The server exposes the following tools to the MCP client:
 
-- **`get_me`**: Get information about the current authenticated user.
-- **`get_my_stats`**: Get driving statistics for the user (with optional filters for track/car/date).
-- **`list_teams`**: List teams the user is a member of.
-- **`get_team_stats`**: Get statistics for a specific team.
-- **`list_cars`**: List all available cars.
-- **`list_tracks`**: List all available tracks.
-- **`find_laps`**: Advanced search for laps by driver, car, track, date, etc.
-- **`get_lap_details`**: Get detailed info for a specific lap.
-- **`get_lap_telemetry`**: Download telemetry data for a lap to a local CSV file.
-- **`analyze_telemetry`**: Analyze a local telemetry CSV to extract corners, braking zones, etc.
-- **`plot_telemetry`**: Generate a plot for a specific lap sector or full lap.
-- **`plot_overlay`**: Generate an overlay plot comparing multiple laps (e.g., your lap vs. a pro).
+- **`garage61_get_me`**: Get information about the current authenticated user.
+- **`garage61_get_my_stats`**: Get driving statistics for the user (with optional filters for track/car/date).
+- **`garage61_list_teams`**: List teams the user is a member of.
+- **`garage61_get_team_stats`**: Get statistics for a specific team.
+- **`garage61_list_cars`**: List all available cars.
+- **`garage61_list_tracks`**: List all available tracks.
+- **`garage61_find_laps`**: Advanced search for laps by driver, car, track, date, etc.
+- **`garage61_get_lap_details`**: Get detailed info for a specific lap.
+- **`garage61_get_lap_telemetry`**: Download telemetry data for a lap to a local CSV file.
+- **`garage61_analyze_telemetry`**: Analyze a local telemetry CSV to extract corners, braking zones, etc.
+- **`garage61_plot_telemetry`**: Generate a plot for a specific lap sector or full lap.
+- **`garage61_plot_overlay`**: Generate an overlay plot comparing multiple laps (e.g., your lap vs. a pro).
 
 ## Development
 

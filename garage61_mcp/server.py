@@ -3,6 +3,7 @@ import json
 from datetime import date, datetime, timedelta, timezone
 from typing import List, Optional
 from fastmcp import FastMCP
+from fastmcp.server.transforms import Namespace
 from dotenv import load_dotenv
 
 # Load environment variables
@@ -15,6 +16,7 @@ from .track_data import TrackDataManager
 
 # Initialize FastMCP server
 mcp = FastMCP("garage61-mcp-server")
+mcp.add_transform(Namespace("garage61"))
 
 # Initialize Garage61 Client
 client = Garage61Client()
