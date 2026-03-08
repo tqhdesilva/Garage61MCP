@@ -12,7 +12,7 @@ class TelemetryAnalyzer:
         try:
             self.data = pd.read_csv(filepath)
             # Ensure necessary columns exist
-            required_columns = ['Speed', 'LapDistPct', 'Lat', 'Lon', 'Brake', 'Throttle', 'LatAccel', 'Yaw']
+            required_columns = ['Speed', 'LapDistPct', 'Lat', 'Lon', 'Brake', 'Throttle', 'LatAccel', 'Yaw', 'Gear']
             if not all(col in self.data.columns for col in required_columns):
                 missing = [col for col in required_columns if col not in self.data.columns]
                 raise ValueError(f"Missing required columns: {missing}")
@@ -311,6 +311,7 @@ class TelemetryAnalyzer:
             'braking': brake_point,
             'turn_in': turn_in_point,
             'brake_to_turn_in_pct': brake_to_turn_in_pct,
+            'entry_gear': int(data['Gear'].iloc[0]),
             'max_steering_rad': float(data['SteeringWheelAngle'].abs().max()),
             'exit_throttle': exit_point
         }
