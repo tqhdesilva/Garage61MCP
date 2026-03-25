@@ -46,6 +46,7 @@ uv tool install "git+https://github.com/tqhdesilva/Garage61MCP.git"
    ```bash
    uv tool install --editable .
    ```
+   Repeat this step if you update the deps.
 
 ## Configuration
 
