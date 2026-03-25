@@ -57,6 +57,21 @@ class TelemetryAnalyzer:
             # Assign corner name (or number)
             self.data.loc[mask, 'Corner'] = corner.number
 
+    def _get_yaw_rate(self):
+        """Returns yaw rate as a Series.
+
+        Uses the YawRate column directly if available (rad/s).
+        Falls back to differentiating the Yaw column (heading angle in radians) if YawRate is missing.
+        """
+        if 'YawRate' in self.data.columns:
+            return self.data['YawRate']
+
+        # Fallback: Yaw is heading angle — differentiate to get rate
+        yaw = self.data['Yaw']
+        yaw_rate = pd.Series(np.gradient(yaw), index=yaw.index)
+        yaw_rate = yaw_rate.rolling(window=5, center=True, min_periods=1).mean()
+        return yaw_rate
+
     def analyze_braking(self):
         """
         Identifies braking zones.
@@ -136,24 +151,34 @@ class TelemetryAnalyzer:
         if is_cornering.iloc[-1]:
             ends = np.append(ends, len(self.data) - 1)
             
+        yaw_rate = self._get_yaw_rate()
+
         corners = []
         for start, end in zip(starts, ends):
             if end - start < 10: # Filter short spikes
                 continue
-                
+
             zone_data = self.data.iloc[start:end+1]
             min_speed = zone_data['Speed'].min()
             min_speed_idx = zone_data['Speed'].idxmin()
-            
+
             # Use LatDistPct at min speed as the "apex" location roughly
             apex_dist = self.data.loc[min_speed_idx, 'LapDistPct']
-            
+
+            # MRP: peak absolute yaw rate in this corner
+            zone_yaw = yaw_rate.iloc[start:end+1]
+            mrp_idx = zone_yaw.abs().idxmax()
+            mrp_row = self.data.loc[mrp_idx]
+
             corners.append({
                 'start_dist_pct': zone_data['LapDistPct'].iloc[0],
                 'end_dist_pct': zone_data['LapDistPct'].iloc[-1],
                 'apex_dist_pct': apex_dist,
                 'min_speed': min_speed,
-                'max_lat_g': zone_data['LatAccel'].abs().max()
+                'max_lat_g': zone_data['LatAccel'].abs().max(),
+                'mrp_dist_pct': float(mrp_row['LapDistPct']),
+                'mrp_yaw_rate': float(yaw_rate.loc[mrp_idx]),
+                'mrp_speed': float(mrp_row['Speed']),
             })
             
         return corners
@@ -280,6 +305,32 @@ class TelemetryAnalyzer:
                 'speed_kph': float(row['Speed'] * 3.6)
             }
 
+        # 6. MRP (Maximum Rotation Point) — peak absolute yaw rate
+        yaw_rate = self._get_yaw_rate()
+        zone_yaw = yaw_rate.loc[data.index]
+        mrp_idx = zone_yaw.abs().idxmax()
+        mrp_row = data.loc[mrp_idx]
+
+        steering_at_mrp = None
+        if 'SteeringWheelAngle' in data.columns:
+            steering_at_mrp = float(mrp_row['SteeringWheelAngle'])
+
+        mrp = {
+            'dist_pct': float(mrp_row['LapDistPct']),
+            'yaw_rate_rad_s': float(zone_yaw.loc[mrp_idx]),
+            'speed_kph': float(mrp_row['Speed'] * 3.6),
+            'brake_at_mrp': float(mrp_row['Brake']),
+            'throttle_at_mrp': float(mrp_row['Throttle']),
+            'steering_at_mrp_rad': steering_at_mrp,
+            'gear_at_mrp': int(mrp_row['Gear']),
+            'mrp_to_apex_offset_pct': float(mrp_row['LapDistPct'] - apex['LapDistPct']),
+        }
+
+        cornering_phases = {
+            'closing_spiral_pct': float(mrp_row['LapDistPct'] - data['LapDistPct'].iloc[0]),
+            'opening_spiral_pct': float(data['LapDistPct'].iloc[-1] - mrp_row['LapDistPct']),
+        }
+
         return {
             'apex': {
                 'dist_pct': float(apex['LapDistPct']),
@@ -290,7 +341,9 @@ class TelemetryAnalyzer:
             'brake_to_turn_in_pct': brake_to_turn_in_pct,
             'entry_gear': int(data['Gear'].iloc[0]),
             'max_steering_rad': float(data['SteeringWheelAngle'].abs().max()),
-            'exit_throttle': exit_point
+            'exit_throttle': exit_point,
+            'mrp': mrp,
+            'cornering_phases': cornering_phases,
         }
 
     def get_driving_line(self, downsample_factor=10):
@@ -392,35 +445,84 @@ class TelemetryAnalyzer:
         plt.close()
         return True
 
-    def plot_racing_line(self, output_file, filepaths, labels=None, start_dist=None, end_dist=None):
+    def _find_mrp_points(self, df):
+        """Find MRP points (peak |yaw rate| per corner) in a DataFrame."""
+        # Get yaw rate
+        if 'YawRate' in df.columns:
+            yaw_rate = df['YawRate']
+        else:
+            yaw = df['Yaw']
+            yaw_rate = pd.Series(np.gradient(yaw), index=yaw.index)
+            yaw_rate = yaw_rate.rolling(window=5, center=True, min_periods=1).mean()
+
+        # Detect corners via lateral acceleration threshold
+        lat_accel_threshold = 0.5
+        is_cornering = df['LatAccel'].abs() > lat_accel_threshold
+        changes = is_cornering.astype(int).diff().fillna(0)
+        starts = np.where(changes == 1)[0]
+        ends = np.where(changes == -1)[0]
+
+        if is_cornering.iloc[0]:
+            starts = np.insert(starts, 0, 0)
+        if is_cornering.iloc[-1]:
+            ends = np.append(ends, len(df) - 1)
+
+        mrp_points = []
+        for s, e in zip(starts, ends):
+            if e - s < 10:
+                continue
+            zone_yaw = yaw_rate.iloc[s:e+1]
+            mrp_iloc = zone_yaw.abs().values.argmax()
+            mrp_idx = zone_yaw.index[mrp_iloc]
+            mrp_points.append({
+                'lon': float(df.loc[mrp_idx, 'Lon']),
+                'lat': float(df.loc[mrp_idx, 'Lat']),
+            })
+        return mrp_points
+
+    def plot_racing_line(self, output_file, filepaths, labels=None, start_dist=None, end_dist=None, mark_mrp=False):
         """
         Generates a racing line plot (Lat vs Lon) for one or more telemetry files.
+        If mark_mrp=True, marks the Maximum Rotation Point for each corner on the racing line.
         """
         if not filepaths:
             return False
-            
+
         if labels is None:
             labels = [f"Lap {i+1}" for i in range(len(filepaths))]
-            
+
         # 10x10 figure with 300 DPI for sharp detail
         plt.figure(figsize=(10, 10))
-        
-        for filepath, label in zip(filepaths, labels):
+
+        colors = plt.rcParams['axes.prop_cycle'].by_key()['color']
+
+        for i, (filepath, label) in enumerate(zip(filepaths, labels)):
             df = pd.read_csv(filepath)
-            
+
             if start_dist is not None and end_dist is not None:
                 if start_dist > end_dist:
                     mask = (df['LapDistPct'] >= start_dist) | (df['LapDistPct'] <= end_dist)
                 else:
                     mask = (df['LapDistPct'] >= start_dist) & (df['LapDistPct'] <= end_dist)
                 df = df[mask]
-            
+
             if df.empty:
                 continue
-                
+
+            color = colors[i % len(colors)]
+
             # Use thinner lines (linewidth=0.5) and alpha (0.6) to show overlap clearly
-            plt.plot(df['Lon'], df['Lat'], label=label, linewidth=0.5, alpha=0.6)
-            
+            plt.plot(df['Lon'], df['Lat'], label=label, linewidth=0.5, alpha=0.6, color=color)
+
+            if mark_mrp:
+                mrp_points = self._find_mrp_points(df)
+                if mrp_points:
+                    mrp_lons = [p['lon'] for p in mrp_points]
+                    mrp_lats = [p['lat'] for p in mrp_points]
+                    mrp_label = f"MRP" if i == 0 else None
+                    plt.scatter(mrp_lons, mrp_lats, color=color, marker='*', s=80, zorder=5,
+                               label=mrp_label, edgecolors='black', linewidths=0.3)
+
         plt.xlabel('Longitude')
         plt.ylabel('Latitude')
         plt.title('Racing Line Comparison')

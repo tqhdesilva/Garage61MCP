@@ -304,7 +304,8 @@ async def analyze_telemetry(filepath: str, track_name: Optional[str] = None) -> 
     **Outputs:**
     - `summary`: Max/Avg speed, total samples.
     - `braking_zones`: List of major braking events.
-    - `corners`: Detected corners with min speeds.
+    - `corners`: Detected corners with min speeds and MRP (Maximum Rotation Point) data including
+      `mrp_dist_pct`, `mrp_yaw_rate`, and `mrp_speed` for each corner.
     - `throttle_zones`: Full throttle sections.
     - `sectors`: Sector timing analysis (if sector info available).
     """
@@ -440,30 +441,34 @@ async def plot_racing_line(
     labels: Optional[List[str]] = None,
     output: Optional[str] = None,
     start: Optional[float] = None,
-    end: Optional[float] = None
+    end: Optional[float] = None,
+    mark_mrp: bool = False
 ) -> str:
     """
     Generate a racing line plot (Lat/Lon) for one or more telemetry laps.
-    
+
     **Args:**
     - `filepaths`: List of CSV file paths to overlay.
     - `labels`: Legend labels corresponding to each file.
     - `output`: Output PNG path.
     - `start`/`end`: Distance range to plot as a percentage of the lap (0.0 to 1.0).
+    - `mark_mrp`: If True, marks the Maximum Rotation Point (peak yaw rate) for each corner
+      on the racing line as star markers. Useful for comparing apex timing between drivers.
     """
     analyzer = TelemetryAnalyzer()
-    
+
     if output is None:
         import tempfile
         fd, output = tempfile.mkstemp(suffix='.png', prefix='racing_line_')
         os.close(fd)
-        
+
     success = analyzer.plot_racing_line(
         output_file=output,
         filepaths=filepaths,
         labels=labels,
         start_dist=start,
-        end_dist=end
+        end_dist=end,
+        mark_mrp=mark_mrp
     )
     
     if success:
@@ -486,7 +491,9 @@ async def get_corner_stats(
     - `end`: End of the sector as a percentage of the lap (0.0 to 1.0).
     
     **Returns:**
-    - JSON string containing apex speed, braking point, turn-in point, and exit throttle stats.
+    - JSON string containing apex speed, braking point, turn-in point, exit throttle stats,
+      MRP (Maximum Rotation Point) metrics (peak yaw rate location, speed, brake/throttle/steering
+      state at MRP, MRP-to-apex offset), and cornering phase analysis (closing/opening spiral lengths).
     """
     analyzer = TelemetryAnalyzer()
     if not analyzer.load_data(filepath):
