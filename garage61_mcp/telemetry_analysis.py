@@ -58,19 +58,8 @@ class TelemetryAnalyzer:
             self.data.loc[mask, 'Corner'] = corner.number
 
     def _get_yaw_rate(self):
-        """Returns yaw rate as a Series.
-
-        Uses the YawRate column directly if available (rad/s).
-        Falls back to differentiating the Yaw column (heading angle in radians) if YawRate is missing.
-        """
-        if 'YawRate' in self.data.columns:
-            return self.data['YawRate']
-
-        # Fallback: Yaw is heading angle — differentiate to get rate
-        yaw = self.data['Yaw']
-        yaw_rate = pd.Series(np.gradient(yaw), index=yaw.index)
-        yaw_rate = yaw_rate.rolling(window=5, center=True, min_periods=1).mean()
-        return yaw_rate
+        """Returns yaw rate as a Series for self.data."""
+        return self._compute_yaw_rate(self.data)
 
     def analyze_braking(self):
         """
@@ -393,46 +382,119 @@ class TelemetryAnalyzer:
         plt.close()
         return True
 
-    def plot_overlay(self, output_file, filepaths, labels=None, start_dist=None, end_dist=None, channels=['Speed', 'Brake', 'Throttle'], markers=None):
+    @staticmethod
+    def _compute_yaw_rate(df):
+        """Compute yaw rate for a DataFrame, using YawRate column or deriving from Yaw."""
+        if 'YawRate' in df.columns:
+            return df['YawRate']
+        if 'Yaw' in df.columns:
+            yaw_rate = pd.Series(np.gradient(df['Yaw']), index=df.index)
+            yaw_rate = yaw_rate.rolling(window=5, center=True, min_periods=1).mean()
+            return yaw_rate
+        return None
+
+    def _find_mrp_points_from_df(self, df):
+        """Find MRP points (peak |yaw rate| per corner) with dist_pct included."""
+        yaw_rate = self._compute_yaw_rate(df)
+        if yaw_rate is None:
+            return []
+
+        lat_accel_threshold = 0.5
+        is_cornering = df['LatAccel'].abs() > lat_accel_threshold
+        changes = is_cornering.astype(int).diff().fillna(0)
+        starts = np.where(changes == 1)[0]
+        ends = np.where(changes == -1)[0]
+
+        if is_cornering.iloc[0]:
+            starts = np.insert(starts, 0, 0)
+        if is_cornering.iloc[-1]:
+            ends = np.append(ends, len(df) - 1)
+
+        mrp_points = []
+        for s, e in zip(starts, ends):
+            if e - s < 10:
+                continue
+            zone_yaw = yaw_rate.iloc[s:e+1]
+            mrp_iloc = zone_yaw.abs().values.argmax()
+            mrp_idx = zone_yaw.index[mrp_iloc]
+            mrp_points.append({
+                'dist_pct': float(df.loc[mrp_idx, 'LapDistPct']),
+                'yaw_rate': float(yaw_rate.loc[mrp_idx]),
+            })
+        return mrp_points
+
+    def plot_overlay(self, output_file, filepaths, labels=None, start_dist=None, end_dist=None, channels=['Speed', 'Brake', 'Throttle'], markers=None, mark_mrp=False):
         """
         Generates an overlay plot of multiple telemetry files.
+        If mark_mrp=True, marks the MRP (peak |yaw rate|) for each corner per driver.
         """
         if not filepaths:
             return False
-            
+
         if labels is None:
             labels = [f"Lap {i+1}" for i in range(len(filepaths))]
-            
+
+        colors = plt.rcParams['axes.prop_cycle'].by_key()['color']
+
         fig, axes = plt.subplots(len(channels), 1, figsize=(12, 4 * len(channels)), sharex=True)
         if len(channels) == 1:
             axes = [axes]
-            
+
         for i, (filepath, label) in enumerate(zip(filepaths, labels)):
-            # Load data temporarily
             df = pd.read_csv(filepath)
-            
+
+            # Compute YawRate if requested but not in CSV
+            if 'YawRate' in channels and 'YawRate' not in df.columns:
+                computed = self._compute_yaw_rate(df)
+                if computed is not None:
+                    df['YawRate'] = computed
+
             if start_dist is not None and end_dist is not None:
                 if start_dist > end_dist:
                     mask = (df['LapDistPct'] >= start_dist) | (df['LapDistPct'] <= end_dist)
                 else:
                     mask = (df['LapDistPct'] >= start_dist) & (df['LapDistPct'] <= end_dist)
                 df = df[mask]
-            
+
             if len(df) == 0:
                 continue
-                
+
+            color = colors[i % len(colors)]
+
             for ax, channel in zip(axes, channels):
                 if channel not in df.columns:
                     continue
-                ax.plot(df['LapDistPct'], df[channel], label=label)
+                ax.plot(df['LapDistPct'], df[channel], label=label, color=color)
                 if channel in ['Brake', 'Throttle']:
                     ax.set_ylim(0, 1)
-                
+
+            # Mark MRP points for this driver
+            if mark_mrp:
+                mrp_points = self._find_mrp_points_from_df(df)
+                for ax, channel in zip(axes, channels):
+                    for mrp in mrp_points:
+                        dist = mrp['dist_pct']
+                        if start_dist is not None and end_dist is not None:
+                            if start_dist > end_dist:
+                                if not (dist >= start_dist or dist <= end_dist):
+                                    continue
+                            else:
+                                if not (start_dist <= dist <= end_dist):
+                                    continue
+                        ax.axvline(x=dist, color=color, linestyle=':', alpha=0.4, linewidth=0.8)
+                    # On YawRate channel, also plot the MRP values as star markers
+                    if channel == 'YawRate' and mrp_points:
+                        mrp_dists = [m['dist_pct'] for m in mrp_points]
+                        mrp_yaws = [m['yaw_rate'] for m in mrp_points]
+                        mrp_label = f"MRP ({label})" if i == 0 else f"MRP ({label})"
+                        ax.scatter(mrp_dists, mrp_yaws, color=color, marker='*', s=100, zorder=5,
+                                   label=mrp_label, edgecolors='black', linewidths=0.3)
+
         for ax, channel in zip(axes, channels):
             ax.set_ylabel(channel)
             ax.grid(True, alpha=0.3)
             ax.legend()
-            
+
             if markers:
                 for dist, text in markers.items():
                     ax.axvline(x=dist, color='r', linestyle='--', alpha=0.5)
@@ -446,16 +508,11 @@ class TelemetryAnalyzer:
         return True
 
     def _find_mrp_points(self, df):
-        """Find MRP points (peak |yaw rate| per corner) in a DataFrame."""
-        # Get yaw rate
-        if 'YawRate' in df.columns:
-            yaw_rate = df['YawRate']
-        else:
-            yaw = df['Yaw']
-            yaw_rate = pd.Series(np.gradient(yaw), index=yaw.index)
-            yaw_rate = yaw_rate.rolling(window=5, center=True, min_periods=1).mean()
+        """Find MRP points (peak |yaw rate| per corner) with lat/lon for racing line plots."""
+        yaw_rate = self._compute_yaw_rate(df)
+        if yaw_rate is None:
+            return []
 
-        # Detect corners via lateral acceleration threshold
         lat_accel_threshold = 0.5
         is_cornering = df['LatAccel'].abs() > lat_accel_threshold
         changes = is_cornering.astype(int).diff().fillna(0)

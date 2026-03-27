@@ -393,33 +393,35 @@ async def plot_overlay(
     start: Optional[float] = None,
     end: Optional[float] = None,
     channels: Optional[List[str]] = None,
-    markers: Optional[dict] = None
+    markers: Optional[dict] = None,
+    mark_mrp: bool = False
 ) -> str:
     """
     Generate an overlay plot of multiple telemetry laps for comparison.
-    
+
     **Args:**
     - `filepaths`: List of CSV file paths to overlay.
     - `labels`: Legend labels corresponding to each file.
     - `output`: Output PNG path.
     - `start`/`end`: Distance range to plot as a percentage of the lap (0.0 to 1.0).
-    - `channels`: Channels to compare (default: Speed, Brake, Throttle).
-    - `markers`: Optional dictionary of markers to draw on the plot. 
+    - `channels`: Channels to compare (default: Speed, Brake, Throttle). Use 'YawRate' for yaw rate (computed from Yaw if needed).
+    - `markers`: Optional dictionary of markers to draw on the plot.
                  Format: {dist_pct: "Label"} where dist_pct is a float between 0.0 and 1.0.
+    - `mark_mrp`: If true, marks the MRP (Maximum Rotation Point / peak |yaw rate|) for each corner per driver. MRP locations shown as vertical dotted lines, and as star markers on the YawRate channel if included.
     """
     analyzer = TelemetryAnalyzer()
-    
+
     if output is None:
         import tempfile
         fd, output = tempfile.mkstemp(suffix='.png', prefix='telemetry_overlay_')
         os.close(fd)
-        
+
     if channels is None:
         channels = ['Speed', 'Brake', 'Throttle']
-        
+
     if markers:
         markers = {float(k): v for k, v in markers.items()}
-        
+
     success = analyzer.plot_overlay(
         output_file=output,
         filepaths=filepaths,
@@ -427,7 +429,8 @@ async def plot_overlay(
         start_dist=start,
         end_dist=end,
         channels=channels,
-        markers=markers
+        markers=markers,
+        mark_mrp=mark_mrp
     )
     
     if success:
