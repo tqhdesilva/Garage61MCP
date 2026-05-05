@@ -537,6 +537,26 @@ class TelemetryAnalyzer:
             })
         return mrp_points
 
+    def _draw_direction_arrows(self, df, n_arrows=12):
+        """Draw arrows along the racing line in the direction of travel.
+
+        Samples n_arrows points at evenly spaced LapDistPct intervals; each
+        arrow points from a sample toward a small forward offset so the head
+        always points the way the car is moving.
+        """
+        if 'LapDistPct' not in df.columns or len(df) < 4:
+            return
+        df_sorted = df.sort_values('LapDistPct').reset_index(drop=True)
+        n = len(df_sorted)
+        step = max(1, n // (n_arrows * 4))
+        positions = np.linspace(0, n - 1 - step, n_arrows).astype(int)
+        for p in positions:
+            x0, y0 = df_sorted['Lon'].iloc[p],        df_sorted['Lat'].iloc[p]
+            x1, y1 = df_sorted['Lon'].iloc[p + step], df_sorted['Lat'].iloc[p + step]
+            plt.annotate('', xy=(x1, y1), xytext=(x0, y0),
+                         arrowprops=dict(arrowstyle='->', color='dimgray',
+                                         lw=1.2, alpha=0.85))
+
     def plot_racing_line(self, output_file, filepaths, labels=None, start_dist=None, end_dist=None, mark_mrp=False):
         """
         Generates a racing line plot (Lat vs Lon) for one or more telemetry files.
@@ -570,6 +590,9 @@ class TelemetryAnalyzer:
 
             # Use thinner lines (linewidth=0.5) and alpha (0.6) to show overlap clearly
             plt.plot(df['Lon'], df['Lat'], label=label, linewidth=0.5, alpha=0.6, color=color)
+
+            if i == 0:
+                self._draw_direction_arrows(df)
 
             if mark_mrp:
                 mrp_points = self._find_mrp_points(df)
